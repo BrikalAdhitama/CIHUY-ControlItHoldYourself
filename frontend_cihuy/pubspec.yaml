@@ -1,0 +1,14 @@
+name: frontend_cihuy
+description: A new Flutter project.
+
+# (Mungkin ada baris publish_to: 'none' dan version: 1.0.0+1 di sini)
+
+environment:
+  sdk: '^3.9.0'  # <--- TAMBAHKAN INI
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.1
+  
+# ... sisa file ...
