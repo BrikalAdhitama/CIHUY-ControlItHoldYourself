@@ -1,14 +1,84 @@
-name: frontend_cihuy
-description: A new Flutter project.
-
-# (Mungkin ada baris publish_to: 'none' dan version: 1.0.0+1 di sini)
+name: CIHUY
+description: Aplikasi pendamping untuk berhenti merokok/vape (CIHUY - Control It, Hold Yourself).
+publish_to: 'none'
+version: 1.0.0+1
 
 environment:
-  sdk: '^3.9.0'  # <--- TAMBAHKAN INI
+  sdk: '^3.9.0'
 
 dependencies:
   flutter:
     sdk: flutter
+
+  # Local DB
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  uuid: ^3.0.7
+
+  # UI & styling
+  flutter_svg: ^2.0.11
+  flutter_markdown: ^0.7.3
+
+  # Network & backend
   http: ^1.2.1
-  
-# ... sisa file ...
+  supabase_flutter: ^2.8.0
+
+  # State & persistent storage
+  provider: ^6.1.5
+  shared_preferences: ^2.2.2
+
+  # Media
+  image_picker: ^1.1.2
+
+  table_calendar: ^3.1.2
+
+  # Waktu & format
+  intl: ^0.20.2
+
+  # Notifikasi
+  flutter_local_notifications: ^19.5.0
+  timezone: ^0.10.1
+
+  # Permission handler
+  permission_handler: ^12.0.1
+
+  # Edukasi (webview + launcher)
+  webview_flutter: ^4.7.0
+  # DULUNYA webview_flutter_android di sini, tapi gue geser ke bawah ⬇
+  url_launcher: ^6.3.1
+
+  # PDF viewing (assets)
+  flutter_pdfview: ^1.2.3
+  path_provider: ^2.0.15
+
+  # 🔥 YouTube embed (NIMPALIN SLOT KOSONG)
+  youtube_player_flutter: ^9.1.3
+
+  # 🔄 WebView Android (DITUKAR POSISI)
+  webview_flutter_android: ^4.10.9
+
+  # 🔧 Override plugin lama yang bikin error namespace
+  flutter_inappwebview: ^6.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+  # 🔥 WAJIB buat generate file Hive (.g.dart)
+  build_runner: ^2.4.6
+  hive_generator: ^2.0.1
+
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon-app.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+    - assets/pdfs/
+    - assets/education/

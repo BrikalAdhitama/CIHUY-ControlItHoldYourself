@@ -1,69 +1,212 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:frontend_cihuy/screens/login_screen.dart';
-import 'package:frontend_cihuy/screens/register_screen.dart';
-import 'package:frontend_cihuy/screens/home_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
-void main() {
-  runApp(const CiHuyApp());
+import 'models/chat_message.dart';
+import 'models/chat_thread.dart';
+import 'models/hive_adapters.dart'; // <-- IMPORTANT: register adapters are here
+import 'providers/theme_provider.dart';
+import 'services/notification_service.dart';
+import 'screens/login_screen.dart';
+import 'screens/pdf_viewer_screen.dart'; // <-- TAMBAH INI
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // -------------------------
+  // Hive init + register adapters
+  // -------------------------
+  await Hive.initFlutter();
+
+  Hive.registerAdapter(ChatMessageAdapter());
+  Hive.registerAdapter(ChatThreadAdapter());
+
+  // -------------------------
+  // Supabase init
+  // -------------------------
+  await Supabase.initialize(
+    url: 'https://jqfqscorljutadkxwzwm.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnFzY29ybGp1dGFka3h3endtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjUxODUsImV4cCI6MjA3OTEwMTE4NX0.Q-eJFGujkxcW8tlTRnlTgSEGJR7EzonHnx1KSi1jMFM',
+  );
+
+  // -------------------------
+  // Notification init
+  // -------------------------
+  await NotificationService.init();
+
+  // -------------------------
+  // INIT LOCALE UNTUK DateFormat('id_ID')
+  // -------------------------
+  await initializeDateFormatting('id_ID', null);
+
+  // -------------------------
+  // Run app wrapped with Provider
+  // -------------------------
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
-class CiHuyApp extends StatelessWidget {
-  const CiHuyApp({super.key});
-
-  // Ini adalah warna utama dari desain Anda
-  static const Color primaryColor = Color(0xFF4DB6AC);
-  static const Color primaryColorDark = Color(0xFF00796B);
-  static const Color backgroundColor = Color(0xFFE0F7FA);
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'CIHUY!',
-      theme: ThemeData(
-        scaffoldBackgroundColor: backgroundColor, // Warna background utama
-        primaryColor: primaryColor,
-        fontFamily: 'Poppins', // (Pastikan Anda menambahkan font ini di assets nanti)
-        
-        // Tema untuk TextButton (Lupa Password)
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: primaryColorDark,
-          ),
-        ),
-        
-        // Tema untuk OutlinedButton (Buat Akun)
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: primaryColor,
-            side: const BorderSide(color: primaryColor, width: 2),
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-        ),
+    const primaryTeal = Color(0xFF00796B);
+    const accentTeal = Color(0xFF4DB6AC);
 
-        // Tema untuk ElevatedButton (Login)
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-          ),
-        )
+    final themeProvider = context.watch<ThemeProvider>();
+
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: primaryTeal,
+      primary: primaryTeal,
+      secondary: accentTeal,
+      brightness: Brightness.light,
+    );
+
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: primaryTeal,
+      primary: primaryTeal,
+      secondary: accentTeal,
+      brightness: Brightness.dark,
+    );
+
+    final lightTheme = ThemeData(
+      useMaterial3: true,
+      colorScheme: lightScheme,
+      scaffoldBackgroundColor: const Color(0xFFE0F2F1),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: Colors.black),
+        titleTextStyle: TextStyle(
+          color: Colors.black,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
       ),
-      debugShowCheckedModeBanner: false,
-      
-      // Halaman awal adalah login
-      initialRoute: '/login',
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: primaryTeal,
+        selectionColor: Color(0xFFB2DFDB),
+        selectionHandleColor: primaryTeal,
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: primaryTeal,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryTeal,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: primaryTeal, width: 2),
+          foregroundColor: primaryTeal,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primaryTeal,
+        ),
+      ),
+    );
 
-      // Daftar semua halaman
+    final darkTheme = ThemeData(
+      useMaterial3: true,
+      colorScheme: darkScheme,
+      scaffoldBackgroundColor: const Color(0xFF121212),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF121212),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: Colors.white),
+        titleTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: accentTeal,
+        selectionColor: Color(0xFF004D40),
+        selectionHandleColor: accentTeal,
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: accentTeal,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: accentTeal,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: accentTeal, width: 2),
+          foregroundColor: accentTeal,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: accentTeal,
+        ),
+      ),
+    );
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'CIHUY',
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: const LoginScreen(),
       routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
+        '/login': (_) => const LoginScreen(),
+        '/pdf-quitline': (_) => const PdfViewerScreen(
+              sourcePath:
+                  'https://jqfqscorljutadkxwzwm.supabase.co/storage/v1/object/public/education-pdf/who/pelatihan_konselor_quitline.pdf',
+              isAsset: false,
+              title: 'Pelatihan Konselor Quitline',
+            ),
+        '/pdf-panduan-mulut': (_) => const PdfViewerScreen(
+              sourcePath:
+                  'https://jqfqscorljutadkxwzwm.supabase.co/storage/v1/object/public/education-pdf/who/panduan_berhenti_tembakau_penyakit_mulut.pdf',
+              isAsset: false,
+              title: 'Panduan Berhenti Tembakau (Penyakit Mulut)',
+            ),
+        '/pdf-integrasi-mulut': (_) => const PdfViewerScreen(
+              sourcePath:
+                  'https://jqfqscorljutadkxwzwm.supabase.co/storage/v1/object/public/education-pdf/who/integrasi_berhenti_merokok_kesehatan_mulut.pdf',
+              isAsset: false,
+              title: 'Integrasi Berhenti Merokok (Kesehatan Mulut)',
+            ),
+        '/pdf-laporan-who': (_) => const PdfViewerScreen(
+              sourcePath:
+                  'https://jqfqscorljutadkxwzwm.supabase.co/storage/v1/object/public/education-pdf/who/laporan_who_epidemi_tembakau_2019.pdf',
+              isAsset: false,
+              title: 'Laporan WHO Epidemi Tembakau 2019',
+            ),
       },
     );
   }
