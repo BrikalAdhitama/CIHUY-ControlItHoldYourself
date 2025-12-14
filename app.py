@@ -18,7 +18,7 @@ from fcm import send_fcm, send_fcm_broadcast
 # ================= SUPABASE =================
 from supabase import create_client, Client
 
-# ================= GEMINI SDK (RESMI & BARU) =================
+# ================= GEMINI SDK (RESMI) =================
 import google.generativeai as genai
 
 
@@ -43,19 +43,17 @@ except Exception as e:
     supabase = None
 
 
-# ================= SYSTEM INSTRUCTION (CIHUY PERSONA) =================
+# ================= SYSTEM INSTRUCTION =================
 SYSTEM_INSTRUCTION = (
     "Kamu adalah CiHuy, chatbot pendamping untuk orang yang ingin berhenti merokok dan vape. "
-    "Gunakan bahasa santai, empatik, dan suportif seperti teman dekat. "
-    "Tugasmu membantu pengguna mengelola craving, motivasi berhenti, "
-    "mengganti kebiasaan merokok dengan aktivitas sehat, "
-    "serta memberi edukasi ringan tentang dampak rokok dan vape. "
-    "Jawaban boleh pendek atau panjang tergantung kebutuhan, "
-    "namun tetap jelas, membumi, dan mudah dipahami. "
-    "Jangan menghakimi pengguna. "
-    "Jika pengguna terlihat tertekan, validasi emosinya dulu sebelum memberi saran. "
-    "JANGAN keluar topik selain rokok, vape, kesehatan, dan proses berhenti kecanduan. "
-    "Jika user keluar topik, arahkan kembali secara halus."
+    "Gunakan bahasa santai, empatik, dan supportive seperti teman dekat. "
+    "Jawaban tidak harus pendek, bisa panjang jika diperlukan, tetapi tetap jelas dan tidak bertele-tele. "
+    "Fokus percakapan pada: kesehatan, coping craving, alasan berhenti, motivasi, kebiasaan pengganti, manajemen stres, dan edukasi tentang dampak rokok/vape. "
+    "Berikan langkah konkret, bukan hanya teori umum. "
+    "Boleh bercerita, jelasin konsep, kasih strategi bertahap, atau validasi emosi pengguna. "
+    "JANGAN keluar topik selain seputar rokok, vape, kesehatan, dan proses berhenti kecanduan. "
+    "Jika user keluar topik, alihkan balik dengan halus. "
+    "Tidak memberikan diagnosis medis atau saran medis hardcore; arahkan ke tenaga profesional jika topik sudah serius."
 )
 
 # ================= CONFIG GEMINI =================
@@ -69,7 +67,7 @@ if GEMINI_API_KEY:
             model_name="gemini-1.5-flash",
             system_instruction=SYSTEM_INSTRUCTION
         )
-        print("[AI] Gemini Ready with System Instruction 🧠")
+        print("[AI] Gemini Ready 🧠")
     except Exception as e:
         print("[AI ERROR] Gemini init failed:", e)
 else:
@@ -80,9 +78,9 @@ else:
 def make_fallback_reply():
     return random.choice([
         "Tarik napas dulu ya. Kamu nggak sendirian.",
-        "Minum air sebentar, craving itu datang dan pergi.",
-        "Coba alihkan 10 menit dulu. Biasanya dorongan itu turun.",
-        "Kamu sudah sejauh ini — itu bukan hal kecil."
+        "Kalau lagi berat, coba jeda 10 menit. Biasanya dorongan itu turun.",
+        "Minum air dan gerak dikit bisa bantu banget.",
+        "Kamu sudah berani berhenti — itu langkah besar."
     ])
 
 
@@ -111,13 +109,12 @@ def job_kirim_per_zona(sesi: str, zona: str):
 
     tokens = get_users_by_zona(zona)
     if not tokens:
-        print("[SCHEDULER] Tidak ada token, skip")
         return
 
     pesan = {
         "pagi": "Pagi, Pejuang! Awali harimu dengan napas yang segar ya.",
-        "siang": "Semangat siang! Ayo, kamu pasti bisa!",
-        "malam": "Hari ini berat? Terima kasih sudah bertahan 🤍"
+        "siang": "Masih bertahan? Tetap semangat ya, Kamu keren banget.",
+        "malam": "Wah sudah Malam. Terima kasih sudah bertahan hari ini.",
     }
 
     send_fcm_broadcast(
@@ -131,17 +128,14 @@ def job_kirim_per_zona(sesi: str, zona: str):
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
 
-# PAGI
-scheduler.add_job(job_kirim_per_zona, "cron", hour=6, minute=0, args=["pagi", "WIT"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=7, minute=0, args=["pagi", "WITA"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=8, minute=0, args=["pagi", "WIB"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=6,  minute=0, args=["pagi", "WIT"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=7,  minute=0, args=["pagi", "WITA"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=8,  minute=0, args=["pagi", "WIB"])
 
-# SIANG
 scheduler.add_job(job_kirim_per_zona, "cron", hour=10, minute=0, args=["siang", "WIT"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=11, minute=0, args=["siang", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=12, minute=0, args=["siang", "WIB"])
 
-# MALAM
 scheduler.add_job(job_kirim_per_zona, "cron", hour=17, minute=0, args=["malam", "WIT"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=18, minute=0, args=["malam", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=19, minute=0, args=["malam", "WIB"])
@@ -200,7 +194,7 @@ def send_notification():
     success, result = send_fcm(
         token,
         data.get("title", "Ingat Cihuy!"),
-        data.get("body", "Waktunya cek progress kamu.")
+        data.get("body", "Kamu nggak sendirian 🤍")
     )
 
     return (
@@ -222,11 +216,32 @@ def chat():
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
     try:
+        prompt = f"""
+User sedang berhenti merokok dan curhat ke CiHuy.
+
+Instruksi:
+- Jawab empatik
+- Jelaskan dengan bahasa manusia
+- Jika ada gejala, jelaskan apakah normal
+- Beri langkah konkret
+- Jangan jawab singkat
+
+Pesan user:
+{message}
+
+Jawaban CiHuy:
+"""
+
         response = model.generate_content(
-            message,
-            generation_config={"temperature": 0.7}
+            prompt,
+            generation_config={
+                "temperature": 0.75,
+                "max_output_tokens": 400
+            }
         )
-        reply = response.text or make_fallback_reply()
+
+        reply = response.text.strip() if response.text else make_fallback_reply()
+
     except Exception as e:
         print("[AI ERROR]", e)
         reply = make_fallback_reply()
