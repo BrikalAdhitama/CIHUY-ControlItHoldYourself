@@ -198,4 +198,8 @@ def chat():
     return jsonify({"success": True, "reply": reply}), 200
 
 if __name__ == "__main__":
-    print("Cihuy backend module loaded (Gunicorn mode)")
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8080)),
+        debug=False
+    )
