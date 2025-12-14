@@ -26,7 +26,6 @@ import google.generativeai as genai
 app = Flask(__name__)
 CORS(app)
 
-
 # ================= CONFIG SUPABASE =================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -44,14 +43,32 @@ except Exception as e:
 
 
 # ================= SYSTEM INSTRUCTION =================
-SYSTEM_INSTRUCTION = (
-    "Kamu adalah CiHuy, chatbot pendamping untuk orang yang ingin berhenti merokok dan vape. "
-    "Gunakan bahasa santai, empatik, dan supportive seperti teman dekat. "
-    "Jawaban boleh panjang jika diperlukan, jangan satu kalimat pendek. "
-    "Jika user menyebut gejala (batuk, pusing, gelisah), jelaskan apakah normal dan apa yang bisa dilakukan. "
-    "Berikan langkah konkret dan reassurance. "
-    "Fokus hanya pada rokok, vape, kesehatan, dan proses berhenti kecanduan."
-)
+SYSTEM_INSTRUCTION = """
+Kamu adalah CiHuy, teman curhat untuk orang yang sedang atau ingin berhenti merokok dan vape.
+
+Gaya bicara:
+- Jawab seperti manusia, bukan bot
+- Bahasa santai, empatik, hangat
+- Jangan pakai jawaban template
+- Jangan jawab satu kalimat pendek
+
+Aturan:
+- Kalau user bercanda atau ngawur, tanggapi santai
+- Kalau user serius, tanggapi empatik
+- Jangan menghakimi
+- Beri penjelasan + langkah konkret
+
+Fokus topik:
+- Berhenti merokok/vape
+- Craving, gejala awal, emosi naik turun
+- Motivasi & coping
+- Edukasi ringan kesehatan
+
+Larangan:
+- Jangan diagnosis medis
+- Jangan keluar topik
+"""
+
 
 # ================= CONFIG GEMINI =================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -60,42 +77,40 @@ model = None
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=SYSTEM_INSTRUCTION
-        )
+        model = genai.GenerativeModel("gemini-2.5-flash")
         print("[AI] Gemini Ready 🧠")
     except Exception as e:
         print("[AI ERROR]", e)
-else:
-    print("[AI] GEMINI_API_KEY not found ❌")
 
 
 # ================= HELPERS =================
 def make_fallback_reply():
     return random.choice([
-        "Tarik napas dulu ya. Kamu nggak sendirian.",
-        "Kalau lagi berat, coba jeda 10 menit. Biasanya dorongan itu turun.",
-        "Minum air dan gerak dikit bisa bantu banget.",
-        "Kamu sudah berani berhenti — itu langkah besar."
+        "Gue masih di sini kok. Coba ceritain pelan-pelan lagi.",
+        "Sebentar ya, gue nangkep dulu ceritamu.",
+        "Kayaknya koneksi gue sempat kejedot 😅. Ulangi dikit ya."
     ])
 
 
 def extract_gemini_text(response):
     """
-    FIX UTAMA:
-    Ambil text dari Gemini SDK dengan aman
+    FIX PENTING:
+    Parsing Gemini response biar fallback nggak kepake mulu
     """
-    # Cara 1 (kalau tersedia)
-    if hasattr(response, "text") and response.text:
-        return response.text.strip()
+    try:
+        # Cara paling umum
+        if hasattr(response, "text") and response.text:
+            return response.text.strip()
 
-    # Cara 2 (SDK resmi – paling sering dipakai)
-    if hasattr(response, "candidates") and response.candidates:
-        try:
-            return response.candidates[0].content.parts[0].text.strip()
-        except Exception:
-            return None
+        # Cara resmi via candidates
+        if hasattr(response, "candidates"):
+            for cand in response.candidates:
+                if hasattr(cand, "content"):
+                    for part in cand.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            return part.text.strip()
+    except Exception as e:
+        print("[AI PARSE ERROR]", e)
 
     return None
 
@@ -113,7 +128,8 @@ def get_users_by_zona(zona: str):
             .eq("zona", zona)
             .execute()
         )
-        return list({item["token"] for item in res.data})
+        tokens = [item["token"] for item in res.data]
+        return list(set(tokens))
     except Exception as e:
         print("[DB ERROR] get_users_by_zona:", e)
         return []
@@ -121,8 +137,11 @@ def get_users_by_zona(zona: str):
 
 # ================= SCHEDULER JOB =================
 def job_kirim_per_zona(sesi: str, zona: str):
+    print(f"[SCHEDULER] {time.strftime('%H:%M')} | {sesi.upper()} → {zona}")
+
     tokens = get_users_by_zona(zona)
     if not tokens:
+        print("[SCHEDULER] Token kosong, skip")
         return
 
     pesan = {
@@ -142,20 +161,52 @@ def job_kirim_per_zona(sesi: str, zona: str):
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
 
-scheduler.add_job(job_kirim_per_zona, "cron", hour=6, minute=0, args=["pagi", "WIB"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=12, minute=0, args=["siang", "WIB"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=19, minute=0, args=["malam", "WIB"])
+# PAGI (08 lokal)
+scheduler.add_job(job_kirim_per_zona, "cron", hour=8, minute=0, args=["pagi", "WIB"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=7, minute=0, args=["pagi", "WITA"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=6, minute=0, args=["pagi", "WIT"])
 
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
+# SIANG (12 lokal)
+scheduler.add_job(job_kirim_per_zona, "cron", hour=12, minute=0, args=["siang", "WIB"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=11, minute=0, args=["siang", "WITA"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=10, minute=0, args=["siang", "WIT"])
+
+# MALAM (19 lokal)
+scheduler.add_job(job_kirim_per_zona, "cron", hour=19, minute=0, args=["malam", "WIB"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=18, minute=0, args=["malam", "WITA"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=17, minute=0, args=["malam", "WIT"])
+
+try:
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
+except Exception as e:
+    print("[SCHEDULER ERROR]", e)
 
 
 # ================= ROUTES =================
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({
-        "status": "Cihuy Backend Online 🚀"
-    })
+    return jsonify({"status": "Cihuy Backend Online 🚀"})
+
+
+@app.route("/save-token", methods=["POST"])
+def save_token():
+    if not supabase:
+        return jsonify({"error": "DB offline"}), 500
+
+    data = request.get_json() or {}
+    token = data.get("token")
+    zona = data.get("zona", "WIB")
+
+    if not token:
+        return jsonify({"error": "Token wajib ada"}), 400
+
+    supabase.table("users").upsert({
+        "token": token,
+        "zona": zona
+    }).execute()
+
+    return jsonify({"message": "Token tersimpan"}), 200
 
 
 @app.route("/chat", methods=["POST"])
@@ -169,15 +220,23 @@ def chat():
     if not message:
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
-    try:
-        prompt = f"""
+    if len(message) < 3:
+        return jsonify({
+            "success": True,
+            "reply": "Hehe gue denger kok 😄 Mau cerita apa hari ini?"
+        })
+
+    prompt = f"""
+{SYSTEM_INSTRUCTION}
+
+Konteks:
 User sedang berhenti merokok dan curhat ke CiHuy.
 
-ATURAN:
-- Jawab empatik
-- Jelaskan dengan bahasa manusia
-- Jangan jawab singkat
-- Beri reassurance + langkah konkret
+Aturan jawaban:
+- Jawab seperti manusia
+- Minimal 3–5 kalimat
+- Jangan pakai template
+- Tanggapi isi pesan secara spesifik
 
 Pesan user:
 {message}
@@ -185,17 +244,19 @@ Pesan user:
 Jawaban CiHuy:
 """
 
+    try:
         response = model.generate_content(
             prompt,
             generation_config={
-                "temperature": 0.75,
-                "max_output_tokens": 400
+                "temperature": 0.8,
+                "max_output_tokens": 500
             }
         )
 
         reply = extract_gemini_text(response)
 
         if not reply:
+            print("[AI WARNING] Empty response, using fallback")
             reply = make_fallback_reply()
 
     except Exception as e:
