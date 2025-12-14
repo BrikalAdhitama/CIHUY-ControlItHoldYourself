@@ -26,6 +26,7 @@ import google.generativeai as genai
 app = Flask(__name__)
 CORS(app)
 
+
 # ================= CONFIG SUPABASE =================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -42,7 +43,7 @@ except Exception as e:
     supabase = None
 
 
-# ================= SYSTEM INSTRUCTION =================
+# ================= SYSTEM INSTRUCTION (SATU-SATUNYA) =================
 SYSTEM_INSTRUCTION = """
 Kamu adalah CiHuy, teman curhat untuk orang yang sedang atau ingin berhenti merokok dan vape.
 
@@ -93,16 +94,10 @@ def make_fallback_reply():
 
 
 def extract_gemini_text(response):
-    """
-    FIX PENTING:
-    Parsing Gemini response biar fallback nggak kepake mulu
-    """
     try:
-        # Cara paling umum
         if hasattr(response, "text") and response.text:
             return response.text.strip()
 
-        # Cara resmi via candidates
         if hasattr(response, "candidates"):
             for cand in response.candidates:
                 if hasattr(cand, "content"):
@@ -176,11 +171,8 @@ scheduler.add_job(job_kirim_per_zona, "cron", hour=19, minute=0, args=["malam", 
 scheduler.add_job(job_kirim_per_zona, "cron", hour=18, minute=0, args=["malam", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=17, minute=0, args=["malam", "WIT"])
 
-try:
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
-except Exception as e:
-    print("[SCHEDULER ERROR]", e)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
 
 
 # ================= ROUTES =================
@@ -229,15 +221,6 @@ def chat():
     prompt = f"""
 {SYSTEM_INSTRUCTION}
 
-Konteks:
-User sedang berhenti merokok dan curhat ke CiHuy.
-
-Aturan jawaban:
-- Jawab seperti manusia
-- Minimal 3–5 kalimat
-- Jangan pakai template
-- Tanggapi isi pesan secara spesifik
-
 Pesan user:
 {message}
 
@@ -249,15 +232,16 @@ Jawaban CiHuy:
             prompt,
             generation_config={
                 "temperature": 0.8,
-                "max_output_tokens": 500
+                "max_output_tokens": 600
             }
         )
 
         reply = extract_gemini_text(response)
-
         if not reply:
-            print("[AI WARNING] Empty response, using fallback")
             reply = make_fallback_reply()
+
+        # delay biar lebih manusiawi
+        time.sleep(2)
 
     except Exception as e:
         print("[AI ERROR]", e)
