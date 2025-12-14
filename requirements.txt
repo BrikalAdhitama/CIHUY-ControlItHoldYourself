@@ -4,3 +4,4 @@ Flask-Bcrypt
 Flask-Cors
 google-generativeai
 python-dotenv
+pytz
