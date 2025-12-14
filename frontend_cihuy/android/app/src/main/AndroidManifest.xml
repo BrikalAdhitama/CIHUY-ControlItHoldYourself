@@ -1,15 +1,28 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-        package="com.cihuy.app">
+    package="com.cihuy.app">
 
-
+    <!-- INTERNET: sudah ada -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- untuk Android 12+ exact alarms -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- dan tetap permission notifikasi (Android13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Optional: wakelock agar alarm/notification tetap dapat dibangunkan -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Optional: untuk menerima boot completed (jika kamu schedule notification setelah device reboot) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="CIHUY"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="false">
 
+        <!-- Main activity (tetap seperti asli) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,13 +36,36 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
+        <!--
+          NOTE:
+          - Jika kamu menggunakan plugin `firebase_messaging` di Flutter, plugin ini
+            biasanya mendaftarkan service dan receiver yang diperlukan sendiri.
+          - Berikut contoh deklarasi service jika kamu punya custom FirebaseMessagingService
+            di native Android (tidak wajib). Jika tidak punya native service, hapus/comment block di bawah.
+        -->
+        <!--
+        <service
+            android:name="com.yourpackage.YourFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name="com.yourpackage.YourBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+        -->
+
+        <!-- Flutter embedding meta-data -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-
     </application>
-
 </manifest>

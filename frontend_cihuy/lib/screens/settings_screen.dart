@@ -1,12 +1,15 @@
+// lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+// import 'package:shared_preferences/shared_preferences.dart'; // Tidak wajib lagi, tapi kalau mau dipakai boleh
 
 import '../providers/theme_provider.dart';
 import '../services/notification_service.dart';
+import '../services/auth_service.dart';
 import 'profile_screen.dart';
 import 'change_password_screen.dart';
+import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String username;
@@ -18,10 +21,12 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  static const _kNotifPrefKey = 'pref_notif_enabled';
+  // static const _kNotifPrefKey = 'pref_notif_enabled'; // Tidak perlu simpan pref manual, ikut izin HP aja
 
   bool _notifEnabled = false;
   bool _loadingNotifState = true;
+  bool _processingToggle = false;
+  bool _isDeletingAccount = false;
 
   @override
   void initState() {
@@ -29,114 +34,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadNotifState();
   }
 
+  // --- PERBAIKAN 1: Cek status notifikasi murni dari Izin HP ---
   Future<void> _loadNotifState() async {
-    // initial state: combine persisted preference + actual permission status
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getBool(_kNotifPrefKey);
-
-      // NotificationService.isEnabled() should reflect whether notifications are scheduled/enabled in app logic
-      final serviceEnabled = await NotificationService.isEnabled();
-
-      // Check system permission status
-      final permissionStatus = await Permission.notification.status;
-
-      final bool effectiveEnabled;
-      if (stored != null) {
-        // If user explicitly toggled in app before, prefer stored value but only enable if permission granted
-        effectiveEnabled = stored && permissionStatus.isGranted && serviceEnabled;
-      } else {
-        // fallback: if service currently has scheduled notifications we consider enabled
-        effectiveEnabled = permissionStatus.isGranted && serviceEnabled;
-      }
-
+      // Kita cukup cek apakah user mengizinkan notifikasi di HP-nya
+      final status = await Permission.notification.status;
+      
       if (!mounted) return;
       setState(() {
-        _notifEnabled = effectiveEnabled;
+        _notifEnabled = status.isGranted;
         _loadingNotifState = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Settings] _loadNotifState error: $e');
       if (!mounted) return;
       setState(() {
-        _notifEnabled = false;
         _loadingNotifState = false;
       });
     }
   }
 
+  // --- PERBAIKAN 2: Toggle hanya mengurus Izin (Tanpa Jadwal Lokal) ---
   Future<void> _onToggleNotification(bool val) async {
+    if (_processingToggle) return;
+
     setState(() {
-      _notifEnabled = val;
+      _processingToggle = true;
     });
 
-    final prefs = await SharedPreferences.getInstance();
-
-    if (val) {
-      // User wants notifications ON
-      final status = await Permission.notification.status;
-
-      if (status.isGranted) {
-        // we have permission → schedule
-        await NotificationService.scheduleDaily8AM();
-        await prefs.setBool(_kNotifPrefKey, true);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pengingat harian jam 08:00 diaktifkan')),
-        );
-      } else {
-        // request permission
-        final result = await Permission.notification.request();
-
-        if (result.isGranted) {
-          // granted now
-          await NotificationService.scheduleDaily8AM();
-          await prefs.setBool(_kNotifPrefKey, true);
+    try {
+      if (val) {
+        // User mau NYALAIN -> Minta Izin ke OS
+        // Panggil fungsi request dari NotificationService yang sudah kita fix
+        final granted = await NotificationService.requestPermissions();
+        
+        if (granted) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Terima kasih, notifikasi aktif')),
+            const SnackBar(content: Text('Notifikasi diaktifkan! Menunggu pesan dari server...')),
           );
-        } else if (result.isPermanentlyDenied) {
-          // user permanently denied — cannot ask again; show dialog to open settings
-          await prefs.setBool(_kNotifPrefKey, false);
+        } else {
+          // Kalau ditolak, suruh buka settings manual
           if (!mounted) return;
           _showOpenSettingsDialog();
-        } else {
-          // denied temporarily or restricted
-          await prefs.setBool(_kNotifPrefKey, false);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Izin notifikasi ditolak')),
-          );
         }
+      } else {
+        // User mau MATIIN -> Android modern tidak izinkan aplikasi matikan izin sendiri
+        // Jadi kita arahkan ke settings HP
+        if (!mounted) return;
+        _showOpenSettingsDialog(isTurningOff: true);
+        
+        // Opsional: Bersihkan notif yang lagi nampil di layar
+        await NotificationService.cancelAll();
       }
-    } else {
-      // User turned notifications OFF in app
-      await NotificationService.cancel();
-      await prefs.setBool(_kNotifPrefKey, false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pengingat harian jam 08:00 dimatikan')),
-      );
+    } catch (e) {
+      debugPrint('Error toggle: $e');
+    } finally {
+      // Refresh status terakhir
+      await _loadNotifState();
+      if (mounted) {
+        setState(() {
+          _processingToggle = false;
+        });
+      }
     }
-
-    // refresh real state (in case permission changed externally)
-    await _loadNotifState();
   }
 
-  void _showOpenSettingsDialog() {
+  void _showOpenSettingsDialog({bool isTurningOff = false}) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Izin dibutuhkan'),
-        content: const Text(
-          'Notifikasi diblokir. Silakan buka pengaturan aplikasi untuk mengizinkan notifikasi agar pengingat bisa berfungsi.',
+        title: Text(isTurningOff ? 'Matikan Notifikasi' : 'Izin Dibutuhkan'),
+        content: Text(
+          isTurningOff
+              ? 'Aplikasi tidak bisa mematikan izin secara otomatis. Silakan matikan manual di Pengaturan.'
+              : 'Notifikasi diblokir. Silakan buka pengaturan aplikasi untuk mengizinkan notifikasi.',
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-            },
-            child: const Text('Nanti'),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () {
@@ -148,6 +125,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  // ========= HAPUS AKUN (TETAP SAMA) =========
+  Future<void> _confirmDeleteAccount() async {
+    if (_isDeletingAccount) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Akun?'),
+        content: const Text(
+          'Akun kamu, riwayat perjalanan, dan data terkait akan dihapus. '
+          'Tindakan ini tidak bisa dibatalkan.\n\nYakin banget mau lanjut?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Ya, hapus',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    setState(() => _isDeletingAccount = true);
+
+    final success = await AuthService.deleteAccount();
+
+    if (!mounted) return;
+    setState(() => _isDeletingAccount = false);
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Akun berhasil dihapus.')),
+      );
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal menghapus akun. Coba lagi sebentar lagi.'),
+        ),
+      );
+    }
   }
 
   Widget _buildSettingsTile({
@@ -179,10 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             color: const Color(0xFF00796B).withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF00796B),
-          ),
+          child: Icon(icon, color: const Color(0xFF00796B)),
         ),
         title: Text(
           title,
@@ -221,7 +250,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // ===== AKUN =====
           const Text(
             'Akun',
             style: TextStyle(
@@ -264,7 +292,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 30),
 
-          // ===== PREFERENSI =====
           const Text(
             'Preferensi',
             style: TextStyle(
@@ -293,7 +320,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSettingsTile(
             context: context,
             icon: Icons.notifications_active_outlined,
-            title: 'Pengingat Pagi 08:00',
+            title: 'Notifikasi Pengingat',
             cardColor: cardColor,
             textColor: textColor,
             trailing: _loadingNotifState
@@ -306,7 +333,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: _notifEnabled,
                     activeColor: primaryTeal,
                     onChanged: (val) async {
-                      // When toggled, manage permission + scheduling
                       await _onToggleNotification(val);
                     },
                   ),
@@ -314,7 +340,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 30),
 
-          // ===== LAINNYA =====
           const Text(
             'Lainnya',
             style: TextStyle(
@@ -343,22 +368,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 30),
 
-          TextButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content:
-                      Text('Fitur hapus akun belum diimplementasikan.'),
-                ),
-              );
-            },
-            child: const Text(
-              'Hapus Akun',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+          Center(
+            child: _isDeletingAccount
+                ? const CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.red,
+                  )
+                : TextButton(
+                    onPressed: _confirmDeleteAccount,
+                    child: const Text(
+                      'Hapus Akun',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),

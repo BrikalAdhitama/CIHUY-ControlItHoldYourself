@@ -1,5 +1,6 @@
 // lib/models/hive_adapters.dart
 import 'package:hive/hive.dart';
+
 import 'chat_message.dart';
 import 'chat_thread.dart';
 
@@ -125,5 +126,16 @@ class ChatThreadAdapter extends TypeAdapter<ChatThread> {
 
     writer.writeByte(3);
     writer.write(obj.lastMessage);
+  }
+}
+
+/// 🔧 Dipanggil dari main.dart
+void registerHiveAdapters() {
+  // Biar nggak crash kalau sampai ke-registrasi dua kali
+  if (!Hive.isAdapterRegistered(0)) {
+    Hive.registerAdapter(ChatMessageAdapter());
+  }
+  if (!Hive.isAdapterRegistered(1)) {
+    Hive.registerAdapter(ChatThreadAdapter());
   }
 }

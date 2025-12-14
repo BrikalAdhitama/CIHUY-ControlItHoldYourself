@@ -1,8 +1,12 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // Flutter plugin app (INI yang bener di sini)
+    // Flutter plugin app 
     id("dev.flutter.flutter-gradle-plugin")
+
+    // Tambahan minimal untuk Firebase Cloud Messaging (FCM)
+    // (tidak mengubah struktur file lain)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -40,4 +44,10 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // Firebase Messaging (FCM) - minimal dependency untuk push notification
+    implementation("com.google.firebase:firebase-messaging:23.4.1")
+
+    // Optional: Play services base (jika butuh)
+    implementation("com.google.android.gms:play-services-base:18.2.0")
 }

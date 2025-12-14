@@ -1,97 +1,114 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
-import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  static const int _dailyId = 100;
-  static const String _prefKeyEnabled = 'notif_enabled';
+  static const String _channelId = 'cihuy_reminder_channel';
+  static const String _channelName = 'Pengingat CIHUY';
+  static const String _channelDesc = 'Notifikasi dari Server Cihuy';
 
-  /// WAJIB dipanggil di main() sebelum runApp()
+  static bool _initialized = false;
+
+  // ---------------------------------------------
+  // 1. INIT: Wajib ada biar notif bisa muncul di layar
+  // ---------------------------------------------
   static Future<void> init() async {
-    tz.initializeTimeZones();
+    if (_initialized) return;
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // Pastikan icon 'ic_launcher' ada di folder android/app/src/main/res/mipmap-*
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    final iosInit = DarwinInitializationSettings();
 
-    const initSettings = InitializationSettings(
-      android: androidSettings,
+    final settings = InitializationSettings(
+      android: androidInit,
+      iOS: iosInit,
+      macOS: iosInit,
     );
 
-    await _plugin.initialize(initSettings);
-  }
+    await _plugin.initialize(settings);
 
-  /// Dipakai SettingsScreen buat tahu switch awal ON / OFF
-  static Future<bool> isEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_prefKeyEnabled) ?? false;
-  }
-
-  /// Minta izin notif HANYA kalau belum granted.
-  /// Dipanggil dari scheduleDaily8AM sebelum ngejadwalin notif.
-  static Future<bool> requestPermissionIfNeeded() async {
-    var status = await Permission.notification.status;
-
-    if (status.isGranted) return true;
-
-    status = await Permission.notification.request();
-    return status.isGranted;
-  }
-
-  /// Jadwalkan notifikasi harian jam 08:00 pagi
-  static Future<void> scheduleDaily8AM() async {
-    // pastikan user udah kasih izin
-    final ok = await requestPermissionIfNeeded();
-    if (!ok) {
-      // user nolak permission → jangan set flag enabled
-      return;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKeyEnabled, true);
-
-    final now = tz.TZDateTime.now(tz.local);
-
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      8, // jam 08:00
-      0,
+    // Setup Channel Android (Penting buat Android 8+ biar ada suara & getar)
+    final channel = AndroidNotificationChannel(
+      _channelId,
+      _channelName,
+      description: _channelDesc,
+      importance: Importance.max, // MAX = Muncul di atas layar (heads-up)
+      playSound: true,
+      enableVibration: true,
     );
 
-    // Kalau sudah lewat jam 8 hari ini, jadwalkan besok
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
+    _initialized = true;
+  }
+
+  // ---------------------------------------------
+  // 2. PERMISSIONS: Minta izin notifikasi (Android 13+ & iOS)
+  // ---------------------------------------------
+  static Future<bool> requestPermissions() async {
+    bool granted = true;
+
+    if (Platform.isIOS || Platform.isMacOS) {
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      granted = await ios?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
+          false;
     }
 
-    await _plugin.zonedSchedule(
-      _dailyId,
-      'Mulai pagi dengan lebih sehat 💚',
-      'Ingat lagi alasan kamu berhenti hari ini. Kamu masih di jalur yang benar!',
-      scheduled,
-      const NotificationDetails(
+    if (Platform.isAndroid) {
+      final notif = await Permission.notification.status;
+      if (!notif.isGranted) {
+        final res = await Permission.notification.request();
+        granted = res.isGranted;
+      }
+    }
+
+    return granted;
+  }
+
+  // ---------------------------------------------
+  // 3. SHOW IMMEDIATE: Fungsi ini dipanggil fcm_service.dart
+  // ---------------------------------------------
+  static Future<void> showImmediate({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    await _plugin.show(
+      id,
+      title,
+      body,
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'daily_reminder_channel',
-          'Daily Reminder',
-          channelDescription: 'Pengingat harian untuk berhenti merokok/vape',
-          importance: Importance.high,
+          _channelId,
+          _channelName,
+          channelDescription: _channelDesc,
+          importance: Importance.max,
           priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
+      payload: payload,
     );
   }
 
-  /// Matikan & hapus notifikasi harian
-  static Future<void> cancel() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKeyEnabled, false);
-    await _plugin.cancel(_dailyId);
-  }
+  // Fungsi Cancel/Clear (Disimpan saja sebagai utility)
+  static Future<void> cancelAll() async => _plugin.cancelAll();
 }

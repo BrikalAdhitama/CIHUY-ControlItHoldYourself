@@ -5,50 +5,63 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+// ----- FIREBASE IMPORTS -----
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // <--- INI WAJIB DITAMBAH
+
+import 'services/fcm_service.dart';
 import 'models/chat_message.dart';
 import 'models/chat_thread.dart';
-import 'models/hive_adapters.dart'; // <-- IMPORTANT: register adapters are here
+import 'models/hive_adapters.dart';
 import 'providers/theme_provider.dart';
 import 'services/notification_service.dart';
 import 'screens/login_screen.dart';
-import 'screens/pdf_viewer_screen.dart'; // <-- TAMBAH INI
+import 'screens/pdf_viewer_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // -------------------------
-  // Hive init + register adapters
-  // -------------------------
+  // INISIALISASI YANG MEMANG SUDAH ADA
+  await initializeDateFormatting('id_ID', null);
   await Hive.initFlutter();
-
   Hive.registerAdapter(ChatMessageAdapter());
   Hive.registerAdapter(ChatThreadAdapter());
 
-  // -------------------------
-  // Supabase init
-  // -------------------------
+  // ----- Firebase init -----
+  await Firebase.initializeApp();
+
+  // ----- Supabase init -----
   await Supabase.initialize(
     url: 'https://jqfqscorljutadkxwzwm.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnFzY29ybGp1dGFka3h3endtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjUxODUsImV4cCI6MjA3OTEwMTE4NX0.Q-eJFGujkxcW8tlTRnlTgSEGJR7EzonHnx1KSi1jMFM',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnFzY29ybGp1dGFka3h3endtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MjUxODUsImV4cCI6MjA3OTEwMTE4NX0.Q-eJFGujkxcW8tlTRnlTgSEGJR7EzonHnx1KSi1jMFM',
   );
 
-  // -------------------------
-  // Notification init
-  // -------------------------
   await NotificationService.init();
+  await FcmService.init();
 
-  // -------------------------
-  // INIT LOCALE UNTUK DateFormat('id_ID')
-  // -------------------------
-  await initializeDateFormatting('id_ID', null);
+  // ==================================================================
+  // 🔥🔥🔥 SCRIPT UNTUK MENDAPATKAN FCM TOKEN (Copy Tokennya) 🔥🔥🔥
+  // ==================================================================
+  try {
+    // Tunggu sebentar biar firebase siap
+    String? token = await FirebaseMessaging.instance.getToken();
+    print("\n");
+    print("👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇");
+    print("🔥 TOKEN FCM CIHUY 🔥");
+    print(token);
+    print("👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆");
+    print("\n");
+  } catch (e) {
+    print("⚠️ Gagal mengambil token: $e");
+  }
+  // ==================================================================
 
-  // -------------------------
-  // Run app wrapped with Provider
-  // -------------------------
+  // THEME PROVIDER
+  final themeProvider = await ThemeProvider.create();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    ChangeNotifierProvider<ThemeProvider>.value(
+      value: themeProvider,
       child: const MyApp(),
     ),
   );
@@ -78,6 +91,7 @@ class MyApp extends StatelessWidget {
       brightness: Brightness.dark,
     );
 
+    // ============= LIGHT THEME =============
     final lightTheme = ThemeData(
       useMaterial3: true,
       colorScheme: lightScheme,
@@ -124,14 +138,33 @@ class MyApp extends StatelessWidget {
           foregroundColor: primaryTeal,
         ),
       ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        hintStyle: const TextStyle(color: Colors.grey),
+        labelStyle: const TextStyle(color: Colors.grey),
+        prefixIconColor: primaryTeal,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: BorderSide(color: primaryTeal.withOpacity(0.4), width: 1.2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: const BorderSide(color: primaryTeal, width: 1.6),
+        ),
+      ),
     );
 
+    // ============= DARK THEME (HIJAU SOFT) =============
     final darkTheme = ThemeData(
       useMaterial3: true,
       colorScheme: darkScheme,
-      scaffoldBackgroundColor: const Color(0xFF121212),
+
+      // background utama lebih terang, hijau gelap soft
+      scaffoldBackgroundColor: const Color(0xFF263833),
+
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF121212),
+        backgroundColor: Color(0xFF263833),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         iconTheme: IconThemeData(color: Colors.white),
@@ -141,9 +174,16 @@ class MyApp extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+
+      // teks default di dark mode
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(color: Colors.white),
+        bodyLarge: TextStyle(color: Colors.white),
+      ),
+
       textSelectionTheme: const TextSelectionThemeData(
         cursorColor: accentTeal,
-        selectionColor: Color(0xFF004D40),
+        selectionColor: Color(0xFF3C5E57),
         selectionHandleColor: accentTeal,
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
@@ -170,6 +210,25 @@ class MyApp extends StatelessWidget {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: accentTeal,
+        ),
+      ),
+
+      // ⬇️ PENTING: Styling TextField di DARK MODE
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        // warna isi textfield di dark
+        fillColor: const Color(0xFF2F4842),
+        hintStyle: const TextStyle(color: Colors.white70),
+        labelStyle: const TextStyle(color: Colors.white70),
+        prefixIconColor: accentTeal,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.25), width: 1.2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: const BorderSide(color: accentTeal, width: 1.6),
         ),
       ),
     );

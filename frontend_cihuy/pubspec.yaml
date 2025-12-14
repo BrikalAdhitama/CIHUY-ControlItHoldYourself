@@ -10,14 +10,21 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # image
+  image_picker: ^1.1.2
+
   # Local DB
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   uuid: ^3.0.7
 
+  # firebase (core + messaging)
+  firebase_core: ^2.12.0
+  firebase_messaging: ^14.6.4
+
   # UI & styling
   flutter_svg: ^2.0.11
-  flutter_markdown: ^0.7.3
+  flutter_markdown: ^0.7.7+1
 
   # Network & backend
   http: ^1.2.1
@@ -27,15 +34,12 @@ dependencies:
   provider: ^6.1.5
   shared_preferences: ^2.2.2
 
-  # Media
-  image_picker: ^1.1.2
-
   table_calendar: ^3.1.2
 
   # Waktu & format
   intl: ^0.20.2
 
-  # Notifikasi
+  # Notifikasi lokal & timezone
   flutter_local_notifications: ^19.5.0
   timezone: ^0.10.1
 
@@ -44,20 +48,19 @@ dependencies:
 
   # Edukasi (webview + launcher)
   webview_flutter: ^4.7.0
-  # DULUNYA webview_flutter_android di sini, tapi gue geser ke bawah ⬇
   url_launcher: ^6.3.1
 
   # PDF viewing (assets)
   flutter_pdfview: ^1.2.3
   path_provider: ^2.0.15
 
-  # 🔥 YouTube embed (NIMPALIN SLOT KOSONG)
+  # YouTube embed
   youtube_player_flutter: ^9.1.3
 
-  # 🔄 WebView Android (DITUKAR POSISI)
+  # WebView Android helper
   webview_flutter_android: ^4.10.9
 
-  # 🔧 Override plugin lama yang bikin error namespace
+  # override plugin lama yang bikin error namespace
   flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
@@ -66,7 +69,7 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
 
-  # 🔥 WAJIB buat generate file Hive (.g.dart)
+  # WAJIB buat generate file Hive (.g.dart)
   build_runner: ^2.4.6
   hive_generator: ^2.0.1
 
@@ -82,3 +85,4 @@ flutter:
     - assets/
     - assets/pdfs/
     - assets/education/
+

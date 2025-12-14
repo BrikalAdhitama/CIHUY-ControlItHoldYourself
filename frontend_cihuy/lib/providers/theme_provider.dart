@@ -1,37 +1,37 @@
+// lib/providers/theme_provider.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode themeMode = ThemeMode.system; // Default ikut pengaturan HP
+  static const _prefKey = 'pref_is_dark_mode';
 
-  bool get isDarkMode => themeMode == ThemeMode.dark;
+  bool _isDarkMode;
 
-  void toggleTheme(bool isOn) {
-    themeMode = isOn ? ThemeMode.dark : ThemeMode.light;
-    notifyListeners(); // Kabari semua widget kalau tema berubah
+  // Konstruktor utama, diisi dari nilai awal (misalnya hasil baca SharedPreferences)
+  ThemeProvider(this._isDarkMode);
+
+  bool get isDarkMode => _isDarkMode;
+
+  ThemeMode get themeMode => _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+
+  /// Dipanggil dari switch di SettingsScreen
+  Future<void> toggleTheme(bool value) async {
+    // Kalau nilainya sama, ga usah ngapa-ngapain
+    if (_isDarkMode == value) return;
+
+    _isDarkMode = value;
+    notifyListeners();
+
+    // Simpan preferensi ke SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefKey, _isDarkMode);
   }
-}
 
-// --- PALET WARNA ---
-class MyThemes {
-  static final lightTheme = ThemeData(
-    scaffoldBackgroundColor: const Color(0xFFE0F7FA), // Background Cyan Muda
-    primaryColor: const Color(0xFF00796B),
-    colorScheme: const ColorScheme.light(),
-    cardColor: Colors.white, // Warna kartu di light mode
-    iconTheme: const IconThemeData(color: Colors.black87),
-    textTheme: const TextTheme(
-      bodyMedium: TextStyle(color: Colors.black87),
-    ),
-  );
-
-  static final darkTheme = ThemeData(
-    scaffoldBackgroundColor: const Color(0xFF121212), // Background Hitam Gelap
-    primaryColor: const Color(0xFF4DB6AC), // Teal yang lebih terang biar kebaca
-    colorScheme: const ColorScheme.dark(),
-    cardColor: const Color(0xFF1E1E1E), // Warna kartu di dark mode (abu gelap)
-    iconTheme: const IconThemeData(color: Colors.white70),
-    textTheme: const TextTheme(
-      bodyMedium: TextStyle(color: Colors.white),
-    ),
-  );
+  /// Factory async buat inisialisasi pertama kali di main()
+  static Future<ThemeProvider> create() async {
+    final prefs = await SharedPreferences.getInstance();
+    // default: false (light mode)
+    final saved = prefs.getBool(_prefKey) ?? false;
+    return ThemeProvider(saved);
+  }
 }

@@ -17,9 +17,6 @@ class AuthService {
 
   // ==========================
   // Helper: parse server timestamp robustly
-  // - If string has timezone (Z or +hh:mm) -> parse and convert to local
-  // - If string is naive (no TZ) -> assume UTC, append 'Z', parse -> local
-  // - If parsing fails -> return null
   // ==========================
   static DateTime? _parseServerTimestampAsUtcThenLocal(dynamic serverVal) {
     if (serverVal == null) return null;
@@ -33,7 +30,6 @@ class AuthService {
       if (hasTz) {
         return DateTime.parse(s).toLocal();
       } else {
-        // assume naive timestamp from server is UTC
         return DateTime.parse(s + 'Z').toLocal();
       }
     } catch (_) {
@@ -101,7 +97,6 @@ class AuthService {
       );
 
       if (response.user != null) {
-        // store UTC ISO consistently
         final nowUtcIso = DateTime.now().toUtc().toIso8601String();
 
         await _supabase.from('profiles').insert({
@@ -178,7 +173,6 @@ class AuthService {
   // 2. PASSWORD RECOVERY
   // ==========================
 
-  // --- KIRIM KODE RESET ---
   static Future<bool> sendPasswordResetEmail(String email) async {
     try {
       await _supabase.auth.resetPasswordForEmail(email);
@@ -188,7 +182,6 @@ class AuthService {
     }
   }
 
-  // --- VERIFIKASI KODE RESET ---
   static Future<Map<String, dynamic>> verifyRecoveryOtp(
       String email, String token) async {
     try {
@@ -210,7 +203,6 @@ class AuthService {
     }
   }
 
-  // --- UPDATE PASSWORD BARU ---
   static Future<bool> updatePassword(String newPassword) async {
     try {
       await _supabase.auth.updateUser(
@@ -256,8 +248,8 @@ class AuthService {
         return DateTime.now();
       }
 
-      // Use robust parser: treat naive string as UTC, convert to local
-      final parsedLocal = _parseServerTimestampAsUtcThenLocal(data['quit_date']);
+      final parsedLocal =
+          _parseServerTimestampAsUtcThenLocal(data['quit_date']);
       return parsedLocal;
     } catch (_) {
       return null;
@@ -265,170 +257,161 @@ class AuthService {
   }
 
   // --- RESET TIMER (KAMBUH) ---
-static Future<Map<String, dynamic>> resetTimer(
-  String username, {
-  int rokok = 0,
-  int vape = 0,
-}) async {
-  try {
-    final user = _supabase.auth.currentUser;
-    if (user == null) {
+  static Future<Map<String, dynamic>> resetTimer(
+    String username, {
+    int rokok = 0,
+    int vape = 0,
+  }) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        return {
+          'success': false,
+          'message': 'User tidak login (session habis).',
+        };
+      }
+
+      final userId = user.id;
+
+      final nowLocal = DateTime.now();
+      final nowUtcIso = nowLocal.toUtc().toIso8601String();
+
+      final dateString =
+          '${nowLocal.year.toString().padLeft(4, '0')}-'
+          '${nowLocal.month.toString().padLeft(2, '0')}-'
+          '${nowLocal.day.toString().padLeft(2, '0')}';
+
+      final existing = await _supabase
+          .from('daily_records')
+          .select()
+          .eq('user_id', userId)
+          .eq('date', dateString)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      Map<String, dynamic>? inserted;
+      Map<String, dynamic>? updated;
+
+      if (existing != null && existing is Map && existing.containsKey('id')) {
+        final prevCigs = (existing['cigarette_count'] ?? 0) as int;
+        final prevVape = (existing['vape_puff_count'] ?? 0) as int;
+
+        updated = await _supabase
+            .from('daily_records')
+            .update({
+              'status': 'relapse',
+              'cigarette_count': prevCigs + rokok,
+              'vape_puff_count': prevVape + vape,
+              'updated_at': nowUtcIso,
+            })
+            .eq('id', existing['id'])
+            .select()
+            .maybeSingle();
+      } else {
+        inserted = await _supabase
+            .from('daily_records')
+            .insert({
+              'user_id': userId,
+              'date': dateString,
+              'status': 'relapse',
+              'cigarette_count': rokok,
+              'vape_puff_count': vape,
+              'updated_at': nowUtcIso,
+            })
+            .select()
+            .maybeSingle();
+      }
+
+      final profileUpdate = await _supabase
+          .from('profiles')
+          .update({
+            'quit_date': nowUtcIso,
+            'updated_at': nowUtcIso,
+          })
+          .eq('id', userId)
+          .select('quit_date')
+          .maybeSingle();
+
+      final returnedQuitIso = profileUpdate?['quit_date'] ?? nowUtcIso;
+
+      return {
+        'success': true,
+        'quit_date': returnedQuitIso,
+        'quit_date_local': nowLocal.toIso8601String(),
+        'inserted': inserted,
+        'updated': updated,
+      };
+    } catch (e) {
       return {
         'success': false,
-        'message': 'User tidak login (session habis).',
+        'message': 'Gagal reset timer: ${e.toString()}',
       };
     }
-
-    final userId = user.id;
-
-    // PAKAI WAKTU LOKAL UNTUK HARI INI
-    final nowLocal = DateTime.now();
-    final nowUtcIso = nowLocal.toUtc().toIso8601String();
-
-    // BUAT YYYY-MM-DD dari waktu lokal (ini yang aman)
-    final dateString =
-        '${nowLocal.year.toString().padLeft(4, '0')}-'
-        '${nowLocal.month.toString().padLeft(2, '0')}-'
-        '${nowLocal.day.toString().padLeft(2, '0')}';
-
-    // cek apakah sudah ada record hari ini
-    final existing = await _supabase
-        .from('daily_records')
-        .select()
-        .eq('user_id', userId)
-        .eq('date', dateString)
-        .order('created_at', ascending: false)
-        .limit(1)
-        .maybeSingle();
-
-    Map<String, dynamic>? inserted;
-    Map<String, dynamic>? updated;
-
-    if (existing != null && existing is Map && existing.containsKey('id')) {
-      // sudah ada → update
-      final prevCigs = (existing['cigarette_count'] ?? 0) as int;
-      final prevVape = (existing['vape_puff_count'] ?? 0) as int;
-
-      updated = await _supabase
-          .from('daily_records')
-          .update({
-            'status': 'relapse',
-            'cigarette_count': prevCigs + rokok,
-            'vape_puff_count': prevVape + vape,
-            'updated_at': nowUtcIso,
-          })
-          .eq('id', existing['id'])
-          .select()
-          .maybeSingle();
-    } else {
-      // belum ada → insert
-      inserted = await _supabase
-          .from('daily_records')
-          .insert({
-            'user_id': userId,
-            'date': dateString,
-            'status': 'relapse',
-            'cigarette_count': rokok,
-            'vape_puff_count': vape,
-            'updated_at': nowUtcIso,
-          })
-          .select()
-          .maybeSingle();
-    }
-
-    // update quit_date → simpan UTC
-    final profileUpdate = await _supabase
-        .from('profiles')
-        .update({
-          'quit_date': nowUtcIso,
-          'updated_at': nowUtcIso,
-        })
-        .eq('id', userId)
-        .select('quit_date')
-        .maybeSingle();
-
-    final returnedQuitIso = profileUpdate?['quit_date'] ?? nowUtcIso;
-
-    return {
-      'success': true,
-      'quit_date': returnedQuitIso,
-      'quit_date_local': nowLocal.toIso8601String(),
-      'inserted': inserted,
-      'updated': updated,
-    };
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'Gagal reset timer: ${e.toString()}',
-    };
   }
-}
 
   // --- AMBIL RIWAYAT 7 HARI (UNTUK HOME) ---
   static Future<List<Map<String, dynamic>>> get7DayHistory() async {
-  try {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return [];
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return [];
 
-    // PAKAI LOCAL NOW
-    final nowLocal = DateTime.now();
+      final nowLocal = DateTime.now();
 
-    List<Map<String, dynamic>> history = [];
+      List<Map<String, dynamic>> history = [];
 
-    for (int i = 6; i >= 0; i--) {
-      final d = nowLocal.subtract(Duration(days: i));
+      for (int i = 6; i >= 0; i--) {
+        final d = nowLocal.subtract(Duration(days: i));
 
-      // convert local -> date-only string
-      final dateString = '${d.year.toString().padLeft(4,'0')}-'
-          '${d.month.toString().padLeft(2,'0')}-'
-          '${d.day.toString().padLeft(2,'0')}';
+        final dateString = '${d.year.toString().padLeft(4, '0')}-'
+            '${d.month.toString().padLeft(2, '0')}-'
+            '${d.day.toString().padLeft(2, '0')}';
 
-      // AMBIL DARI DB PAKE LOCAL DATE
-      final rows = await _supabase
-          .from('daily_records')
-          .select('status, cigarette_count, vape_puff_count')
-          .eq('user_id', user.id)
-          .eq('date', dateString);
+        final rows = await _supabase
+            .from('daily_records')
+            .select('status, cigarette_count, vape_puff_count')
+            .eq('user_id', user.id)
+            .eq('date', dateString);
 
-      String status;
-      String detail;
+        String status;
+        String detail;
 
-      if (rows != null && rows.isNotEmpty) {
-        bool anyRelapse = false;
-        int totalCigs = 0;
-        int totalVape = 0;
+        if (rows != null && rows.isNotEmpty) {
+          bool anyRelapse = false;
+          int totalCigs = 0;
+          int totalVape = 0;
 
-        for (final r in rows) {
-          final s = (r['status'] ?? 'relapse') as String;
-          if (s == 'relapse') anyRelapse = true;
-          totalCigs += (r['cigarette_count'] ?? 0) as int;
-          totalVape += (r['vape_puff_count'] ?? 0) as int;
+          for (final r in rows) {
+            final s = (r['status'] ?? 'relapse') as String;
+            if (s == 'relapse') anyRelapse = true;
+            totalCigs += (r['cigarette_count'] ?? 0) as int;
+            totalVape += (r['vape_puff_count'] ?? 0) as int;
+          }
+
+          status = anyRelapse ? 'relapse' : 'success';
+
+          List<String> parts = [];
+          if (totalCigs > 0) parts.add('$totalCigs rokok');
+          if (totalVape > 0) parts.add('$totalVape hisapan vape');
+          detail = parts.isNotEmpty ? parts.join(', ') : 'Kambuh';
+        } else {
+          status = 'neutral';
+          detail = '';
         }
 
-        status = anyRelapse ? 'relapse' : 'success';
-
-        List<String> parts = [];
-        if (totalCigs > 0) parts.add('$totalCigs rokok');
-        if (totalVape > 0) parts.add('$totalVape hisapan vape');
-        detail = parts.isNotEmpty ? parts.join(', ') : 'Kambuh';
-      } else {
-        status = 'neutral';
-        detail = '';
+        history.add({
+          'day': d.day,
+          'date': dateString,
+          'status': status,
+          'detail': detail,
+        });
       }
 
-      history.add({
-        'day': d.day,
-        'date': dateString,    // LOCAL YYYY-MM-DD
-        'status': status,
-        'detail': detail,
-      });
+      return history;
+    } catch (e) {
+      return [];
     }
-
-    return history;
-  } catch (e) {
-    return [];
   }
-}
 
   // --- AMBIL RIWAYAT FULL (UNTUK HISTORY SCREEN) ---
   static Future<List<Map<String, dynamic>>> getFullHistory() async {
@@ -465,7 +448,7 @@ static Future<Map<String, dynamic>> resetTimer(
     }
   }
 
-  // --- AMBIL PROFIL USER SAAT INI (UNTUK PROFILE SCREEN) ---
+  // --- AMBIL PROFIL USER SAAT INI ---
   static Future<Map<String, dynamic>?> getCurrentProfile() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -473,13 +456,14 @@ static Future<Map<String, dynamic>> resetTimer(
 
       final data = await _supabase
           .from('profiles')
-          .select('username, email, avatar_url, quit_date')
+          .select('display_name, username, email, avatar_url, quit_date')
           .eq('id', user.id)
           .single();
 
       // convert quit_date to local before returning (if present)
       if (data != null && data['quit_date'] != null) {
-        final parsedLocal = _parseServerTimestampAsUtcThenLocal(data['quit_date']);
+        final parsedLocal =
+            _parseServerTimestampAsUtcThenLocal(data['quit_date']);
         if (parsedLocal != null) {
           data['quit_date_local'] = parsedLocal.toIso8601String();
         }
@@ -491,38 +475,98 @@ static Future<Map<String, dynamic>> resetTimer(
     }
   }
 
-  // --- UPLOAD AVATAR & SIMPAN URL KE profiles ---
-  static Future<String?> uploadAvatar(String filePath) async {
+  // --- UPDATE DISPLAY NAME ---
+  static Future<bool> updateDisplayName(String displayName) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return null;
+      if (user == null) return false;
 
-      final file = File(filePath);
-      if (!file.existsSync()) {
-        return null;
-      }
-
-      final fileName =
-          "avatar_${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg";
-
-      final storage = _supabase.storage.from('profile-avatars');
-
-      await storage.upload(
-        fileName,
-        file,
-        fileOptions: const FileOptions(contentType: 'image/jpeg'),
-      );
-
-      final publicUrl = storage.getPublicUrl(fileName);
+      final nowUtcIso = DateTime.now().toUtc().toIso8601String();
 
       await _supabase
           .from('profiles')
-          .update({'avatar_url': publicUrl})
+          .update({
+            'display_name': displayName,
+            'updated_at': nowUtcIso,
+          })
           .eq('id', user.id);
 
-      return publicUrl;
+      return true;
     } catch (_) {
-      return null;
+      return false;
+    }
+  }
+
+  // --- UPLOAD AVATAR & SIMPAN URL KE profiles ---
+  static Future<Map<String, dynamic>> uploadAvatar(String filePath) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        print('[uploadAvatar] ERROR: user not logged in');
+        return {
+          'success': false,
+          'message': 'Session kamu habis, silakan login ulang.'
+        };
+      }
+
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        print('[uploadAvatar] ERROR: file not found at $filePath');
+        return {
+          'success': false,
+          'message': 'File gambar tidak ditemukan di perangkat.'
+        };
+      }
+
+      // ambil ekstensi (jpg/png)
+      final ext = filePath.split('.').last.toLowerCase();
+      final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
+
+      final fileName =
+          "avatar_${user.id}_${DateTime.now().millisecondsSinceEpoch}.$ext";
+
+      print(
+          '[uploadAvatar] start upload to bucket profile-avatars, name=$fileName');
+
+      final storage = _supabase.storage.from('profile-avatars');
+
+      // upload ke Supabase Storage
+      final uploadRes = await storage.upload(
+        fileName,
+        file,
+        fileOptions: FileOptions(
+          contentType: contentType,
+          upsert: true,
+        ),
+      );
+
+      print('[uploadAvatar] upload result: $uploadRes');
+
+      // ambil public URL
+      final publicUrl = storage.getPublicUrl(fileName);
+      print('[uploadAvatar] public url: $publicUrl');
+
+      // update kolom avatar_url di tabel profiles
+      final updateRes = await _supabase
+          .from('profiles')
+          .update({'avatar_url': publicUrl})
+          .eq('id', user.id)
+          .select()
+          .maybeSingle();
+
+      print('[uploadAvatar] profile update result: $updateRes');
+
+      return {
+        'success': true,
+        'url': publicUrl,
+      };
+    } catch (e, st) {
+      print('[uploadAvatar] ERROR: $e');
+      print(st);
+      return {
+        'success': false,
+        'message': 'Gagal upload ke server: $e',
+      };
     }
   }
 
@@ -543,6 +587,31 @@ static Future<Map<String, dynamic>> resetTimer(
       return picked['text'] as String;
     } catch (_) {
       return '"Berhenti merokok bukanlah pengorbanan; itu adalah pembebasan."';
+    }
+  }
+
+  static Future<bool> deleteAccount() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return false;
+
+      final userId = user.id;
+
+      await _supabase
+          .from('daily_records')
+          .delete()
+          .eq('user_id', userId);
+
+      await _supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
+
+      await _supabase.auth.signOut();
+
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 

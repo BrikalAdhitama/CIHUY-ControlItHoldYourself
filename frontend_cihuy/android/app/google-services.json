@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "97552196704",
+    "project_id": "cihuy-8ebc6",
+    "storage_bucket": "cihuy-8ebc6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:97552196704:android:6a24d3b122d92993588f05",
+        "android_client_info": {
+          "package_name": "com.cihuy.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABdV0AAGqtEA8tzjTsJJjMzQAkLRHSEVI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

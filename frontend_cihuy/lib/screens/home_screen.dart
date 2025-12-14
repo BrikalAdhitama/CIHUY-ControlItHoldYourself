@@ -11,7 +11,8 @@ import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'history_screen.dart';
 import 'education_screen.dart';
-import 'login_screen.dart'; // <- pastikan file ini ada
+import 'login_screen.dart';
+import 'help_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String username;
@@ -27,6 +28,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _timer;
 
   int _selectedIndex = 0;
+
+  String? _displayName;
+  String? _email;
+  String? _avatarUrl;
+  bool _profileLoading = true;
 
   final TextEditingController _rokokController = TextEditingController();
   final TextEditingController _vapeController = TextEditingController();
@@ -54,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _loadQuitDate();
     await _loadHistoryAndProgress();
     await _loadMotivationQuote();
+    await _loadProfile();
     _startTimer();
   }
 
@@ -109,7 +116,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ---------------------
   Future<void> _loadQuitDate() async {
     try {
-      final serverVal = await AuthService.getQuitDate(); // may return DateTime? or String? depending impl
+      final serverVal =
+          await AuthService.getQuitDate(); // may return DateTime? or String? depending impl
       DateTime? serverLocal;
 
       if (serverVal is DateTime) {
@@ -214,7 +222,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _motivationText = '"Berhenti merokok bukanlah pengorbanan; itu adalah pembebasan."';
+        _motivationText =
+            '"Berhenti merokok bukanlah pengorbanan; itu adalah pembebasan."';
+      });
+    }
+  }
+
+
+  Future<void> _loadProfile() async {
+    try {
+      final data = await AuthService.getCurrentProfile();
+
+      String? displayName = widget.username;
+      String? email;
+      String? avatarUrl;
+
+      if (data != null) {
+        final username = data['username'] as String?;
+        final dName = data['display_name'] as String?;
+
+        // prioritas: display_name -> username -> yang dikirim dari login
+        displayName = dName ?? username ?? widget.username;
+        email = data['email'] as String?;
+        avatarUrl = data['avatar_url'] as String?;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _displayName = displayName ?? widget.username;
+        _email = email;
+        _avatarUrl = avatarUrl;
+        _profileLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _profileLoading = false;
       });
     }
   }
@@ -261,24 +304,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   String _normalizeDateKey(String isoDate) {
-      try {
-        if (isoDate.isEmpty) return '';
-        // isoDate bisa datang sebagai "2025-11-26" atau "2025-11-26T12:34:56Z"
-        final dateOnly = isoDate.split('T')[0];
-        // basic validation: must match yyyy-mm-dd
-        final parts = dateOnly.split('-');
-        if (parts.length == 3) {
-          final y = parts[0].padLeft(4, '0');
-          final m = parts[1].padLeft(2, '0');
-          final d = parts[2].padLeft(2, '0');
-          return '$y-$m-$d';
-        }
-        return dateOnly;
-      } catch (e) {
-        return isoDate;
+    try {
+      if (isoDate.isEmpty) return '';
+      // isoDate bisa datang sebagai "2025-11-26" atau "2025-11-26T12:34:56Z"
+      final dateOnly = isoDate.split('T')[0];
+      // basic validation: must match yyyy-mm-dd
+      final parts = dateOnly.split('-');
+      if (parts.length == 3) {
+        final y = parts[0].padLeft(4, '0');
+        final m = parts[1].padLeft(2, '0');
+        final d = parts[2].padLeft(2, '0');
+        return '$y-$m-$d';
       }
+      return dateOnly;
+    } catch (e) {
+      return isoDate;
     }
-
+  }
 
   // ---------------------
   // Relapse dialogs
@@ -318,13 +360,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal')),
         ],
       ),
     );
   }
 
-  void _showRelapseAmountDialog({required bool isRokok, required bool isVape}) {
+  void _showRelapseAmountDialog(
+      {required bool isRokok, required bool isVape}) {
     _rokokController.clear();
     _vapeController.clear();
 
@@ -339,25 +384,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               TextField(
                 controller: _rokokController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Jumlah Batang Rokok', icon: Icon(Icons.smoke_free)),
+                decoration: const InputDecoration(
+                    labelText: 'Jumlah Batang Rokok',
+                    icon: Icon(Icons.smoke_free)),
               ),
             if (isVape)
               TextField(
                 controller: _vapeController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Jumlah Hisapan Vape', icon: Icon(Icons.vaping_rooms)),
+                decoration: const InputDecoration(
+                    labelText: 'Jumlah Hisapan Vape',
+                    icon: Icon(Icons.vaping_rooms)),
               ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
               Navigator.pop(context);
               _processRelapse();
             },
-            child: const Text('Reset Timer', style: TextStyle(color: Colors.white)),
+            child: const Text('Reset Timer',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -373,7 +425,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (rokokCount == 0 && vapeCount == 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Isi dulu jumlah rokok / hisapan vape-nya.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Isi dulu jumlah rokok / hisapan vape-nya.')));
       return;
     }
 
@@ -393,8 +446,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else if (res is Map<String, dynamic>) {
       success = res['success'] == true;
       if (res['message'] is String) errMsg = res['message'] as String;
-      if (res['quit_date'] is String) serverQuitIso = res['quit_date'] as String;
-      if (res['quit_date_local'] is String) serverQuitLocalIso = res['quit_date_local'] as String;
+      if (res['quit_date'] is String) {
+        serverQuitIso = res['quit_date'] as String;
+      }
+      if (res['quit_date_local'] is String) {
+        serverQuitLocalIso = res['quit_date_local'] as String;
+      }
     }
 
     if (!mounted) return;
@@ -405,7 +462,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       DateTime newQuitLocal;
       if (serverQuitLocalIso != null) {
-        newQuitLocal = DateTime.tryParse(serverQuitLocalIso)?.toLocal() ?? DateTime.now();
+        newQuitLocal =
+            DateTime.tryParse(serverQuitLocalIso)?.toLocal() ?? DateTime.now();
       } else if (serverQuitIso != null) {
         final parsed = _parseServerTimestampAsUtcThenLocal(serverQuitIso);
         newQuitLocal = parsed ?? DateTime.now();
@@ -423,9 +481,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _loadHistoryAndProgress();
       if (mounted) setState(() {});
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data tercatat. Jujur itu awal kesembuhan!'), backgroundColor: Colors.orange));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Data tercatat. Jujur itu awal kesembuhan!'),
+          backgroundColor: Colors.orange));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errMsg ?? 'Gagal me-reset timer (cek koneksi)')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              errMsg ?? 'Gagal me-reset timer (cek koneksi)')));
     }
   }
 
@@ -436,7 +498,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _timer?.cancel();
     await AuthService.logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false);
   }
 
   Future<void> _confirmLogout() async {
@@ -444,10 +508,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Yakin ingin logout?'),
-        content: const Text('Lu bakal keluar dari akun dan balik ke halaman login.'),
+        content: const Text(
+            'Lu bakal keluar dari akun dan balik ke halaman login.'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Logout', style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child:
+                  const Text('Logout', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -459,6 +529,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _loadQuitDate().then((_) => _startTimer());
       _loadHistoryAndProgress();
+      _loadProfile(); // <-- biar avatar ke-refresh kalau berubah
     }
     super.didChangeAppLifecycleState(state);
   }
@@ -486,9 +557,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final textColor = isDarkMode ? Colors.white : Colors.black;
     final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
-    final scaffoldBg = isDarkMode ? const Color(0xFF071012) : const Color(0xFFE0F2F1);
-    final drawerHeaderColor = isDarkMode ? const Color(0xFF004D40) : const Color(0xFF00796B);
-    final panicButtonColor = isDarkMode ? const Color(0xFF00796B) : Colors.black87;
+    final scaffoldBg =
+        isDarkMode ? const Color(0xFF071012) : const Color(0xFFE0F2F1);
+    final drawerHeaderColor =
+        isDarkMode ? const Color(0xFF004D40) : const Color(0xFF00796B);
+    final panicButtonColor =
+        isDarkMode ? const Color(0xFF00796B) : Colors.black87;
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -498,7 +572,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         drawer: _buildDrawer(context, drawerHeaderColor, isDarkMode),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 20.0, vertical: 16.0),
             child: Column(
               children: [
                 _buildTimerCard(cardColor, textColor),
@@ -516,8 +591,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
         floatingActionButton: _buildPanicButton(panicButtonColor),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        bottomNavigationBar: SafeArea(top: false, child: _buildBottomNavigationBar(isDarkMode ? const Color(0xFF121212) : Colors.white, isDarkMode)),
+        floatingActionButtonLocation:
+            FloatingActionButtonLocation.endFloat,
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: _buildBottomNavigationBar(
+              isDarkMode ? const Color(0xFF121212) : Colors.white,
+              isDarkMode),
+        ),
       ),
     );
   }
@@ -528,10 +609,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      iconTheme: IconThemeData(color: isDarkMode ? Colors.white70 : Colors.black87),
+      iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white70 : Colors.black87),
       leading: Builder(
         builder: (context) => IconButton(
-          icon: Icon(Icons.menu, color: isDarkMode ? Colors.white70 : Colors.black87),
+          icon: Icon(Icons.menu,
+              color: isDarkMode ? Colors.white70 : Colors.black87),
           onPressed: () => Scaffold.of(context).openDrawer(),
         ),
       ),
@@ -539,12 +622,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Padding(
           padding: const EdgeInsets.only(right: 20.0),
           child: GestureDetector(
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileScreen(username: widget.username)));
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      ProfileScreen(username: widget.username),
+                ),
+              );
+              if (mounted) {
+                _loadProfile(); // refresh avatar setelah balik dari profil
+              }
             },
             child: CircleAvatar(
-              backgroundColor: isDarkMode ? Colors.grey.withOpacity(0.12) : Colors.grey.withOpacity(0.3),
-              child: Icon(Icons.person, color: isDarkMode ? Colors.white70 : Colors.white),
+              radius: 18,
+              backgroundColor: isDarkMode
+                  ? Colors.grey.withOpacity(0.12)
+                  : Colors.grey.withOpacity(0.3),
+              backgroundImage:
+                  _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+              child: _avatarUrl == null
+                  ? Icon(
+                      Icons.person,
+                      color: isDarkMode ? Colors.white70 : Colors.white,
+                    )
+                  : null,
             ),
           ),
         ),
@@ -552,7 +654,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildDrawer(BuildContext context, Color headerColor, bool isDarkMode) {
+  Widget _buildDrawer(
+      BuildContext context, Color headerColor, bool isDarkMode) {
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -565,27 +668,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  CircleAvatar(backgroundColor: Colors.white, radius: 30, child: Icon(Icons.person, size: 40, color: Colors.grey)),
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white,
+                    backgroundImage: _avatarUrl != null
+                        ? NetworkImage(_avatarUrl!)
+                        : null,
+                    child: _avatarUrl == null
+                        ? const Icon(
+                            Icons.person,
+                            size: 40,
+                            color: Colors.grey,
+                          )
+                        : null,
+                  ),
                   const SizedBox(height: 10),
-                  Text('Halo, ${widget.username}!', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  Text('Semangat terus ya 🔥', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  Text(
+                    'Halo, ${_displayName ?? widget.username}!',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Semangat terus ya 🔥',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          ListTile(leading: Icon(Icons.settings, color: isDarkMode ? Colors.white70 : null), title: const Text('Pengaturan'), onTap: () {
-            Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (context) => SettingsScreen(username: widget.username)));
-          }),
-          ListTile(leading: Icon(Icons.help_outline, color: isDarkMode ? Colors.white70 : null), title: const Text('Bantuan & Info'), onTap: () {
-            Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen()));
-          }),
+          ListTile(
+            leading: Icon(Icons.settings,
+                color: isDarkMode ? Colors.white70 : null),
+            title: const Text('Pengaturan'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      SettingsScreen(username: widget.username),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.help_outline, color: isDarkMode ? Colors.white70 : null),
+            title: const Text('Bantuan & Info'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => HelpScreen()),
+              );
+            },
+          ),
           const Divider(),
-          ListTile(leading: const Icon(Icons.exit_to_app, color: Colors.red), title: const Text('Log Out', style: TextStyle(color: Colors.red)), onTap: () async {
-            Navigator.pop(context);
-            await _confirmLogout();
-          }),
+          ListTile(
+            leading: const Icon(Icons.exit_to_app, color: Colors.red),
+            title: const Text(
+              'Log Out',
+              style: TextStyle(color: Colors.red),
+            ),
+            onTap: () async {
+              Navigator.pop(context);
+              await _confirmLogout();
+            },
+          ),
         ],
       ),
     );
@@ -599,20 +753,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final seconds = two(_elapsed.inSeconds.remainder(60));
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.withOpacity(0.12)), boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.05), spreadRadius: 2, blurRadius: 10, offset: const Offset(0, 5))
-      ]),
-      child: Column(children: [
-        Text('Berhenti Sejak', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, decoration: TextDecoration.underline, color: txtColor)),
-        const SizedBox(height: 20),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_timeBox(hours, 'Jam', txtColor), _timeBox(minutes, 'Menit', txtColor), _timeBox(seconds, 'Detik', txtColor)])
-      ]),
+      padding:
+          const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.withOpacity(0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 2,
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          )
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Berhenti Sejak',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.underline,
+              color: txtColor,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _timeBox(hours, 'Jam', txtColor),
+              _timeBox(minutes, 'Menit', txtColor),
+              _timeBox(seconds, 'Detik', txtColor),
+            ],
+          )
+        ],
+      ),
     );
   }
 
   Widget _timeBox(String value, String label, Color color) {
-    return Column(children: [Text(value, style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: color)), Text(label, style: const TextStyle(fontSize: 16, color: Colors.grey))]);
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 40,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 16, color: Colors.grey),
+        )
+      ],
+    );
   }
 
   Widget _buildProgressCard(Color bgColor, Color txtColor) {
@@ -620,251 +817,413 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.withOpacity(0.12))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Streak & Ringkasan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: txtColor)),
-        const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_buildProgressItem(Icons.calendar_today, '$streakDays', 'Hari\nBebas', txtColor), _buildProgressItem(Icons.smoke_free, '$_estimatedCigsAvoided', 'Rokok\nDihindari', txtColor)])
-      ]),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.withOpacity(0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Streak & Ringkasan',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: txtColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildProgressItem(
+                Icons.calendar_today,
+                '$streakDays',
+                'Hari\nBebas',
+                txtColor,
+              ),
+              _buildProgressItem(
+                Icons.smoke_free,
+                '$_estimatedCigsAvoided',
+                'Rokok\nDihindari',
+                txtColor,
+              ),
+            ],
+          )
+        ],
+      ),
     );
   }
 
-  Widget _buildProgressItem(IconData icon, String value, String label, Color color) {
-    return Column(children: [Icon(icon, size: 35, color: color), const SizedBox(height: 8), Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)), const SizedBox(height: 4), Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.grey))]);
+  Widget _buildProgressItem(
+      IconData icon, String value, String label, Color color) {
+    return Column(
+      children: [
+        Icon(icon, size: 35, color: color),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        )
+      ],
+    );
   }
 
   Widget _buildMotivationCard(Color txtColor) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDarkMode ? Colors.grey.withOpacity(0.08) : const Color(0xFFE0F2F1);
-    final borderColor = isDarkMode ? Colors.white12 : const Color(0xFFB2DFDB);
-    final titleColor = isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF00796B);
+    final cardBg = isDarkMode
+        ? Colors.grey.withOpacity(0.08)
+        : const Color(0xFFE0F2F1);
+    final borderColor =
+        isDarkMode ? Colors.white12 : const Color(0xFFB2DFDB);
+    final titleColor =
+        isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF00796B);
 
-    return InkWell(onTap: _loadMotivationQuote, borderRadius: BorderRadius.circular(15), child: Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(15), border: Border.all(color: borderColor), boxShadow: isDarkMode ? [] : [BoxShadow(color: Colors.teal.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Motivasi Harian', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: titleColor)), const SizedBox(height: 10), Text(_motivationText, style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: txtColor))])));
-  }
-
-    Widget _buildHistoryCard(Color bgColor, Color txtColor) {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-
-      const monthNames = [
-        "Januari",
-        "Februari",
-        "Maret",
-        "April",
-        "Mei",
-        "Juni",
-        "Juli",
-        "Agustus",
-        "September",
-        "Oktober",
-        "November",
-        "Desember"
-      ];
-      final currentMonthYear = "${monthNames[today.month - 1]} ${today.year}";
-
-      // 7 hari terakhir: today-6 s/d today
-      final daysToShow = List.generate(
-        7,
-        (i) => today.subtract(Duration(days: 6 - i)),
-      );
-
-      // map dari tanggal (yyyy-MM-dd) -> data history
-      final Map<String, Map<String, dynamic>> historyMap = {
-        for (final h in _history7Days)
-          _normalizeDateKey((h['date'] ?? '') as String): h,
-      };
-
-      // ========= CARI RELAPSE PERTAMA DI 7 HARI TERAKHIR =========
-      DateTime? firstRelapseInWindow;
-      for (final h in _history7Days) {
-        final status = (h['status'] as String?) ?? '';
-        if (status != 'relapse') continue;
-
-        final key = _normalizeDateKey((h['date'] ?? '') as String);
-        if (key.isEmpty) continue;
-        final parts = key.split('-');
-        if (parts.length != 3) continue;
-
-        final d = DateTime(
-          int.parse(parts[0]),
-          int.parse(parts[1]),
-          int.parse(parts[2]),
-        );
-
-        // pastikan d memang termasuk 7 hari yang ditampilkan
-        if (daysToShow.any((dd) =>
-            dd.year == d.year && dd.month == d.month && dd.day == d.day)) {
-          if (firstRelapseInWindow == null || d.isBefore(firstRelapseInWindow!)) {
-            firstRelapseInWindow = d;
-          }
-        }
-      }
-
-      // Kalau gak ada relapse sama sekali di 7 hari terakhir,
-      // anggap suksesStart = hari pertama di window
-      final DateTime successStart =
-          firstRelapseInWindow ?? daysToShow.first;
-
-      return Container(
+    return InkWell(
+      onTap: _loadMotivationQuote,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: cardBg,
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.grey.withOpacity(0.12)),
+          border: Border.all(color: borderColor),
+          boxShadow: isDarkMode
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.teal.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Riwayat 7 Hari',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    decoration: TextDecoration.underline,
-                    color: txtColor,
-                  ),
-                ),
-                Row(
-                  children: [
-                    Text(
-                      currentMonthYear,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: txtColor,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const HistoryScreen(),
-                          ),
-                        );
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF00796B),
-                      ),
-                      child: const Text(
-                        'Lihat Semua >',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            Text(
+              'Motivasi Harian',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
             ),
-            const SizedBox(height: 15),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: daysToShow.map((date) {
-                final key = _dateKeyFromDate(date);
-                final data = historyMap[key];
-
-                String status;
-
-                // future date (harusnya gak kejadian sih, tapi jaga-jaga)
-                if (date.isAfter(today)) {
-                  status = 'neutral';
-                }
-                // sebelum suksesStart -> netral (contoh: 24 sebelum relapse 25)
-                else if (date.isBefore(successStart)) {
-                  status = 'neutral';
-                }
-                // kalau hari ini relapse -> relapse
-                else if (data != null &&
-                    ((data['status'] as String?) ?? '') == 'relapse') {
-                  status = 'relapse';
-                }
-                // sisanya (hari ini / masa lalu sesudah suksesStart, tapi bukan relapse)
-                else {
-                  status = 'success';
-                }
-
-                Color circleColor;
-                switch (status) {
-                  case 'success':
-                    circleColor = const Color(0xFF00796B);
-                    break;
-                  case 'relapse':
-                    circleColor = Colors.redAccent;
-                    break;
-                  default:
-                    circleColor = Colors.grey.withOpacity(0.2);
-                }
-
-                final isToday = _isSameDay(date, today);
-
-                return GestureDetector(
-                  onTap: () {
-                    if (data != null &&
-                        (data['detail'] as String?)?.isNotEmpty == true &&
-                        status != 'neutral') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(data['detail']),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                  child: Container(
-                    width: 35,
-                    height: 35,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: circleColor,
-                      shape: BoxShape.circle,
-                      border: isToday
-                          ? Border.all(
-                              color: Colors.black.withOpacity(0.3),
-                              width: 1.5,
-                            )
-                          : null,
-                    ),
-                    child: Text(
-                      '${date.day}',
-                      style: TextStyle(
-                        color: (status == 'success' || status == 'relapse')
-                            ? Colors.white
-                            : (txtColor == Colors.white
-                                ? Colors.white70
-                                : Colors.black54),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+            const SizedBox(height: 10),
+            Text(
+              _motivationText,
+              style: TextStyle(
+                fontSize: 15,
+                fontStyle: FontStyle.italic,
+                color: txtColor,
+              ),
             ),
           ],
         ),
-      );
-    }
-
-
-  Widget _buildPanicButton(Color backgroundColor) {
-    return Padding(padding: const EdgeInsets.only(bottom: 70.0), child: FloatingActionButton.extended(onPressed: _showRelapseTypeDialog, label: const Text('Saya Merokok/Vape Lagi', style: TextStyle(color: Colors.white)), icon: const Icon(Icons.warning_amber_rounded, color: Colors.white), backgroundColor: backgroundColor));
+      ),
+    );
   }
 
-  Widget _buildBottomNavigationBar(Color bgColor, bool isDarkMode) {
-    return BottomNavigationBar(backgroundColor: bgColor, currentIndex: _selectedIndex, selectedItemColor: const Color(0xFF00796B), unselectedItemColor: isDarkMode ? Colors.white54 : Colors.grey, showSelectedLabels: true, showUnselectedLabels: true, onTap: _onItemTapped, items: [
-      const BottomNavigationBarItem(icon: Icon(Icons.home_filled, size: 28), label: 'Home'),
-      BottomNavigationBarItem(icon: SvgPicture.asset('assets/chatbot.svg', width: 28, colorFilter: ColorFilter.mode(_selectedIndex == 1 ? const Color(0xFF00796B) : (isDarkMode ? Colors.white54 : Colors.grey), BlendMode.srcIn)), label: 'Chat AI'),
-      const BottomNavigationBarItem(icon: Icon(Icons.menu_book_rounded, size: 26), label: 'Edukasi'),
-    ]);
+  Widget _buildHistoryCard(Color bgColor, Color txtColor) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    const monthNames = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember"
+    ];
+    final currentMonthYear =
+        "${monthNames[today.month - 1]} ${today.year}";
+
+    // 7 hari terakhir: today-6 s/d today
+    final daysToShow = List.generate(
+      7,
+      (i) => today.subtract(Duration(days: 6 - i)),
+    );
+
+    // map dari tanggal (yyyy-MM-dd) -> data history
+    final Map<String, Map<String, dynamic>> historyMap = {
+      for (final h in _history7Days)
+        _normalizeDateKey((h['date'] ?? '') as String): h,
+    };
+
+    // ========= CARI RELAPSE PERTAMA DI 7 HARI TERAKHIR =========
+    DateTime? firstRelapseInWindow;
+    for (final h in _history7Days) {
+      final status = (h['status'] as String?) ?? '';
+      if (status != 'relapse') continue;
+
+      final key = _normalizeDateKey((h['date'] ?? '') as String);
+      if (key.isEmpty) continue;
+      final parts = key.split('-');
+      if (parts.length != 3) continue;
+
+      final d = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+
+      // pastikan d memang termasuk 7 hari yang ditampilkan
+      if (daysToShow.any((dd) =>
+          dd.year == d.year &&
+          dd.month == d.month &&
+          dd.day == d.day)) {
+        if (firstRelapseInWindow == null ||
+            d.isBefore(firstRelapseInWindow!)) {
+          firstRelapseInWindow = d;
+        }
+      }
+    }
+
+    // Kalau gak ada relapse sama sekali di 7 hari terakhir,
+    // anggap suksesStart = hari pertama di window
+    final DateTime successStart =
+        firstRelapseInWindow ?? daysToShow.first;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.withOpacity(0.12)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Riwayat 7 Hari',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                  color: txtColor,
+                ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    currentMonthYear,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: txtColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const HistoryScreen(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF00796B),
+                    ),
+                    child: const Text(
+                      'Lihat Semua >',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Row(
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+            children: daysToShow.map((date) {
+              final key = _dateKeyFromDate(date);
+              final data = historyMap[key];
+
+              String status;
+
+              // future date (harusnya gak kejadian sih, tapi jaga-jaga)
+              if (date.isAfter(today)) {
+                status = 'neutral';
+              }
+              // sebelum suksesStart -> netral (contoh: 24 sebelum relapse 25)
+              else if (date.isBefore(successStart)) {
+                status = 'neutral';
+              }
+              // kalau hari ini relapse -> relapse
+              else if (data != null &&
+                  ((data['status'] as String?) ?? '') ==
+                      'relapse') {
+                status = 'relapse';
+              }
+              // sisanya (hari ini / masa lalu sesudah suksesStart, tapi bukan relapse)
+              else {
+                status = 'success';
+              }
+
+              Color circleColor;
+              switch (status) {
+                case 'success':
+                  circleColor = const Color(0xFF00796B);
+                  break;
+                case 'relapse':
+                  circleColor = Colors.redAccent;
+                  break;
+                default:
+                  circleColor =
+                      Colors.grey.withOpacity(0.2);
+              }
+
+              final isToday = _isSameDay(date, today);
+
+              return GestureDetector(
+                onTap: () {
+                  if (data != null &&
+                      (data['detail'] as String?)
+                              ?.isNotEmpty ==
+                          true &&
+                      status != 'neutral') {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(
+                      SnackBar(
+                        content: Text(data['detail']),
+                        duration:
+                            const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  width: 35,
+                  height: 35,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: circleColor,
+                    shape: BoxShape.circle,
+                    border: isToday
+                        ? Border.all(
+                            color: Colors.black
+                                .withOpacity(0.3),
+                            width: 1.5,
+                          )
+                        : null,
+                  ),
+                  child: Text(
+                    '${date.day}',
+                    style: TextStyle(
+                      color: (status == 'success' ||
+                              status == 'relapse')
+                          ? Colors.white
+                          : (txtColor == Colors.white
+                              ? Colors.white70
+                              : Colors.black54),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPanicButton(Color backgroundColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 70.0),
+      child: FloatingActionButton.extended(
+        onPressed: _showRelapseTypeDialog,
+        label: const Text(
+          'Saya Merokok/Vape Lagi',
+          style: TextStyle(color: Colors.white),
+        ),
+        icon: const Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.white,
+        ),
+        backgroundColor: backgroundColor,
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationBar(
+      Color bgColor, bool isDarkMode) {
+    return BottomNavigationBar(
+      backgroundColor: bgColor,
+      currentIndex: _selectedIndex,
+      selectedItemColor: const Color(0xFF00796B),
+      unselectedItemColor:
+          isDarkMode ? Colors.white54 : Colors.grey,
+      showSelectedLabels: true,
+      showUnselectedLabels: true,
+      onTap: _onItemTapped,
+      items: [
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.home_filled, size: 28),
+          label: 'Home',
+        ),
+        BottomNavigationBarItem(
+          icon: SvgPicture.asset(
+            'assets/chatbot.svg',
+            width: 28,
+            colorFilter: ColorFilter.mode(
+              _selectedIndex == 1
+                  ? const Color(0xFF00796B)
+                  : (isDarkMode
+                      ? Colors.white54
+                      : Colors.grey),
+              BlendMode.srcIn,
+            ),
+          ),
+          label: 'Chat AI',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.menu_book_rounded, size: 26),
+          label: 'Edukasi',
+        ),
+      ],
+    );
   }
 
   BoxDecoration _card(Color bg) {
-    return BoxDecoration(color: bg, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.withOpacity(0.12)));
+    return BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: Colors.grey.withOpacity(0.12)),
+    );
   }
 
-  Widget _buildEducationCard(Color bgColor, Color txtColor, bool isDarkMode) {
-    const heroAssetPath = 'assets/edu_hero.svg'; // <-- ganti kalau nama file beda
+  Widget _buildEducationCard(
+      Color bgColor, Color txtColor, bool isDarkMode) {
+    const heroAssetPath =
+        'assets/edu_hero.svg'; // <-- ganti kalau nama file beda
 
     final gradient = LinearGradient(
       colors: isDarkMode
@@ -874,7 +1233,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       end: Alignment.bottomRight,
     );
 
-    final titleColor = isDarkMode ? Colors.white : const Color(0xFF004D40);
+    final titleColor =
+        isDarkMode ? Colors.white : const Color(0xFF004D40);
     final subtitleColor = isDarkMode
         ? Colors.white70
         : const Color(0xFF004D40).withOpacity(0.8);
@@ -883,7 +1243,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const EducationScreen()),
+          MaterialPageRoute(
+            builder: (context) => const EducationScreen(),
+          ),
         );
       },
       borderRadius: BorderRadius.circular(18),
@@ -902,13 +1264,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 18, vertical: 16),
           child: Row(
             children: [
               // TEKS KIRI
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Edukasi',
