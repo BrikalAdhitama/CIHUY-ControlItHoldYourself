@@ -198,6 +198,4 @@ def chat():
     return jsonify({"success": True, "reply": reply}), 200
 
 if __name__ == "__main__":
-    print("Menyalakan Server Cihuy... (Supabase Mode)")
-    # Port 5000 biar cocok sama ngrok http 5000
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True, use_reloader=False)
+    print("Cihuy backend module loaded (Gunicorn mode)")
