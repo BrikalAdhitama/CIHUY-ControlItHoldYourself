@@ -18,8 +18,13 @@ from fcm import send_fcm, send_fcm_broadcast
 # ================= SUPABASE =================
 from supabase import create_client, Client
 
-# ================= GEMINI (SDK BARU & BENAR) =================
+# ================= GEMINI SDK (RESMI & BARU) =================
 import google.generativeai as genai
+
+
+# ================= APP INIT =================
+app = Flask(__name__)
+CORS(app)
 
 
 # ================= CONFIG SUPABASE =================
@@ -34,9 +39,24 @@ try:
     else:
         print("[DB] Supabase ENV missing ❌")
 except Exception as e:
-    print(f"[DB ERROR] {e}")
+    print("[DB ERROR]", e)
     supabase = None
 
+
+# ================= SYSTEM INSTRUCTION (CIHUY PERSONA) =================
+SYSTEM_INSTRUCTION = (
+    "Kamu adalah CiHuy, chatbot pendamping untuk orang yang ingin berhenti merokok dan vape. "
+    "Gunakan bahasa santai, empatik, dan suportif seperti teman dekat. "
+    "Tugasmu membantu pengguna mengelola craving, motivasi berhenti, "
+    "mengganti kebiasaan merokok dengan aktivitas sehat, "
+    "serta memberi edukasi ringan tentang dampak rokok dan vape. "
+    "Jawaban boleh pendek atau panjang tergantung kebutuhan, "
+    "namun tetap jelas, membumi, dan mudah dipahami. "
+    "Jangan menghakimi pengguna. "
+    "Jika pengguna terlihat tertekan, validasi emosinya dulu sebelum memberi saran. "
+    "JANGAN keluar topik selain rokok, vape, kesehatan, dan proses berhenti kecanduan. "
+    "Jika user keluar topik, arahkan kembali secara halus."
+)
 
 # ================= CONFIG GEMINI =================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -45,40 +65,25 @@ model = None
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        print("[AI] Gemini Ready 🧠")
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+        print("[AI] Gemini Ready with System Instruction 🧠")
     except Exception as e:
         print("[AI ERROR] Gemini init failed:", e)
 else:
     print("[AI] GEMINI_API_KEY not found ❌")
 
 
-SYSTEM_INSTRUCTION = (
-    "Kamu adalah CiHuy, chatbot pendamping untuk orang yang ingin berhenti merokok dan vape. "
-    "Gunakan bahasa santai, empatik, dan supportive seperti teman dekat. "
-    "Jawaban tidak harus pendek, bisa panjang jika diperlukan, tetapi tetap jelas dan tidak bertele-tele. "
-    "Fokus percakapan pada: kesehatan, coping craving, alasan berhenti, motivasi, kebiasaan pengganti, manajemen stres, dan edukasi tentang dampak rokok/vape. "
-    "Berikan langkah konkret, bukan hanya teori umum. "
-    "Boleh bercerita, jelasin konsep, kasih strategi bertahap, atau validasi emosi pengguna. "
-    "JANGAN keluar topik selain seputar rokok, vape, kesehatan, dan proses berhenti kecanduan. "
-    "Jika user keluar topik, alihkan balik dengan halus. "
-    "Tidak memberikan diagnosis medis atau saran medis hardcore; arahkan ke tenaga profesional jika topik sudah serius."
-)
-
-# ================= APP INIT =================
-app = Flask(__name__)
-CORS(app)
-
-
 # ================= HELPERS =================
 def make_fallback_reply():
-    tips = [
+    return random.choice([
         "Tarik napas dulu ya. Kamu nggak sendirian.",
         "Minum air sebentar, craving itu datang dan pergi.",
-        "Fokus 10 menit aja. Biasanya lewat.",
-        "Kamu sudah sejauh ini, itu nggak kecil."
-    ]
-    return random.choice(tips)
+        "Coba alihkan 10 menit dulu. Biasanya dorongan itu turun.",
+        "Kamu sudah sejauh ini — itu bukan hal kecil."
+    ])
 
 
 # ================= DB HELPERS =================
@@ -87,37 +92,32 @@ def get_users_by_zona(zona: str):
         return []
 
     try:
-        response = (
+        res = (
             supabase
             .table("users")
             .select("token")
             .eq("zona", zona)
             .execute()
         )
-
-        tokens = [item["token"] for item in response.data]
-        return list(set(tokens))
+        return list({item["token"] for item in res.data})
     except Exception as e:
-        print(f"[DB ERROR] get_users_by_zona: {e}")
+        print("[DB ERROR] get_users_by_zona:", e)
         return []
 
 
 # ================= SCHEDULER JOB =================
-def job_kirim_per_zona(sesi, target_zona):
-    print(
-        f"[SCHEDULER] {time.strftime('%H:%M')} "
-        f"Kirim {sesi} ke {target_zona}"
-    )
+def job_kirim_per_zona(sesi: str, zona: str):
+    print(f"[SCHEDULER] {time.strftime('%H:%M')} | {sesi.upper()} → {zona}")
 
-    tokens = get_users_by_zona(target_zona)
+    tokens = get_users_by_zona(zona)
     if not tokens:
-        print("[SCHEDULER] Token kosong, skip")
+        print("[SCHEDULER] Tidak ada token, skip")
         return
 
     pesan = {
         "pagi": "Pagi, Pejuang! Awali harimu dengan napas yang segar ya.",
         "siang": "Semangat siang! Ayo, kamu pasti bisa!",
-        "malam": "Sudah malam nih. Terima kasih sudah bertahan hari ini."
+        "malam": "Hari ini berat? Terima kasih sudah bertahan 🤍"
     }
 
     send_fcm_broadcast(
@@ -132,9 +132,9 @@ jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
 
 # PAGI
-scheduler.add_job(job_kirim_per_zona, "cron", hour=6,  minute=0, args=["pagi", "WIT"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=7,  minute=0, args=["pagi", "WITA"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=8,  minute=0, args=["pagi", "WIB"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=6, minute=0, args=["pagi", "WIT"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=7, minute=0, args=["pagi", "WITA"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=8, minute=0, args=["pagi", "WIB"])
 
 # SIANG
 scheduler.add_job(job_kirim_per_zona, "cron", hour=10, minute=0, args=["siang", "WIT"])
@@ -203,9 +203,11 @@ def send_notification():
         data.get("body", "Waktunya cek progress kamu.")
     )
 
-    if success:
-        return jsonify({"message": "Terkirim", "id": result}), 200
-    return jsonify({"error": result}), 500
+    return (
+        jsonify({"message": "Terkirim", "id": result}), 200
+        if success else
+        jsonify({"error": result}), 500
+    )
 
 
 @app.route("/chat", methods=["POST"])
