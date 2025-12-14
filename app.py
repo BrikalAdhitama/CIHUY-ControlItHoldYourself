@@ -18,7 +18,7 @@ from fcm import send_fcm, send_fcm_broadcast
 # ================= SUPABASE =================
 from supabase import create_client, Client
 
-# ================= GEMINI SDK (RESMI) =================
+# ================= GEMINI SDK =================
 import google.generativeai as genai
 
 
@@ -47,13 +47,10 @@ except Exception as e:
 SYSTEM_INSTRUCTION = (
     "Kamu adalah CiHuy, chatbot pendamping untuk orang yang ingin berhenti merokok dan vape. "
     "Gunakan bahasa santai, empatik, dan supportive seperti teman dekat. "
-    "Jawaban tidak harus pendek, bisa panjang jika diperlukan, tetapi tetap jelas dan tidak bertele-tele. "
-    "Fokus percakapan pada: kesehatan, coping craving, alasan berhenti, motivasi, kebiasaan pengganti, manajemen stres, dan edukasi tentang dampak rokok/vape. "
-    "Berikan langkah konkret, bukan hanya teori umum. "
-    "Boleh bercerita, jelasin konsep, kasih strategi bertahap, atau validasi emosi pengguna. "
-    "JANGAN keluar topik selain seputar rokok, vape, kesehatan, dan proses berhenti kecanduan. "
-    "Jika user keluar topik, alihkan balik dengan halus. "
-    "Tidak memberikan diagnosis medis atau saran medis hardcore; arahkan ke tenaga profesional jika topik sudah serius."
+    "Jawaban boleh panjang jika diperlukan, jangan satu kalimat pendek. "
+    "Jika user menyebut gejala (batuk, pusing, gelisah), jelaskan apakah normal dan apa yang bisa dilakukan. "
+    "Berikan langkah konkret dan reassurance. "
+    "Fokus hanya pada rokok, vape, kesehatan, dan proses berhenti kecanduan."
 )
 
 # ================= CONFIG GEMINI =================
@@ -69,7 +66,7 @@ if GEMINI_API_KEY:
         )
         print("[AI] Gemini Ready 🧠")
     except Exception as e:
-        print("[AI ERROR] Gemini init failed:", e)
+        print("[AI ERROR]", e)
 else:
     print("[AI] GEMINI_API_KEY not found ❌")
 
@@ -82,6 +79,25 @@ def make_fallback_reply():
         "Minum air dan gerak dikit bisa bantu banget.",
         "Kamu sudah berani berhenti — itu langkah besar."
     ])
+
+
+def extract_gemini_text(response):
+    """
+    FIX UTAMA:
+    Ambil text dari Gemini SDK dengan aman
+    """
+    # Cara 1 (kalau tersedia)
+    if hasattr(response, "text") and response.text:
+        return response.text.strip()
+
+    # Cara 2 (SDK resmi – paling sering dipakai)
+    if hasattr(response, "candidates") and response.candidates:
+        try:
+            return response.candidates[0].content.parts[0].text.strip()
+        except Exception:
+            return None
+
+    return None
 
 
 # ================= DB HELPERS =================
@@ -105,16 +121,14 @@ def get_users_by_zona(zona: str):
 
 # ================= SCHEDULER JOB =================
 def job_kirim_per_zona(sesi: str, zona: str):
-    print(f"[SCHEDULER] {time.strftime('%H:%M')} | {sesi.upper()} → {zona}")
-
     tokens = get_users_by_zona(zona)
     if not tokens:
         return
 
     pesan = {
-        "pagi": "Pagi, Pejuang! Awali harimu dengan napas yang segar ya.",
-        "siang": "Masih bertahan? Tetap semangat ya, Kamu keren banget.",
-        "malam": "Wah sudah Malam. Terima kasih sudah bertahan hari ini.",
+        "pagi": "Pagi, Pejuang! Awali harimu dengan napas yang segar 🌱",
+        "siang": "Masih bertahan? Kamu keren banget 💪",
+        "malam": "Hari ini berat? Terima kasih sudah bertahan 🤍"
     }
 
     send_fcm_broadcast(
@@ -128,16 +142,8 @@ def job_kirim_per_zona(sesi: str, zona: str):
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
 
-scheduler.add_job(job_kirim_per_zona, "cron", hour=6,  minute=0, args=["pagi", "WIT"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=7,  minute=0, args=["pagi", "WITA"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=8,  minute=0, args=["pagi", "WIB"])
-
-scheduler.add_job(job_kirim_per_zona, "cron", hour=10, minute=0, args=["siang", "WIT"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=11, minute=0, args=["siang", "WITA"])
+scheduler.add_job(job_kirim_per_zona, "cron", hour=6, minute=0, args=["pagi", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=12, minute=0, args=["siang", "WIB"])
-
-scheduler.add_job(job_kirim_per_zona, "cron", hour=17, minute=0, args=["malam", "WIT"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=18, minute=0, args=["malam", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=19, minute=0, args=["malam", "WIB"])
 
 scheduler.start()
@@ -147,61 +153,9 @@ atexit.register(lambda: scheduler.shutdown())
 # ================= ROUTES =================
 @app.route("/", methods=["GET"])
 def home():
-    total_users = "Offline"
-
-    if supabase:
-        try:
-            res = supabase.table("users").select("*", count="exact", head=True).execute()
-            total_users = res.count
-        except:
-            total_users = "Error DB"
-
     return jsonify({
-        "status": "Cihuy Backend Online 🚀",
-        "database": "Connected" if supabase else "Offline",
-        "users_connected": total_users
+        "status": "Cihuy Backend Online 🚀"
     })
-
-
-@app.route("/save-token", methods=["POST"])
-def save_token():
-    data = request.get_json() or {}
-    token = data.get("token")
-    zona = data.get("zona", "WIB")
-
-    if not token:
-        return jsonify({"error": "Token wajib ada"}), 400
-
-    try:
-        supabase.table("users").upsert({
-            "token": token,
-            "zona": zona
-        }).execute()
-
-        return jsonify({"message": "Token tersimpan"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/send-notification", methods=["POST"])
-def send_notification():
-    data = request.get_json() or {}
-    token = data.get("token")
-
-    if not token:
-        return jsonify({"error": "Token wajib ada"}), 400
-
-    success, result = send_fcm(
-        token,
-        data.get("title", "Ingat Cihuy!"),
-        data.get("body", "Kamu nggak sendirian 🤍")
-    )
-
-    return (
-        jsonify({"message": "Terkirim", "id": result}), 200
-        if success else
-        jsonify({"error": result}), 500
-    )
 
 
 @app.route("/chat", methods=["POST"])
@@ -219,12 +173,11 @@ def chat():
         prompt = f"""
 User sedang berhenti merokok dan curhat ke CiHuy.
 
-Instruksi:
+ATURAN:
 - Jawab empatik
 - Jelaskan dengan bahasa manusia
-- Jika ada gejala, jelaskan apakah normal
-- Beri langkah konkret
 - Jangan jawab singkat
+- Beri reassurance + langkah konkret
 
 Pesan user:
 {message}
@@ -240,7 +193,10 @@ Jawaban CiHuy:
             }
         )
 
-        reply = response.text.strip() if response.text else make_fallback_reply()
+        reply = extract_gemini_text(response)
+
+        if not reply:
+            reply = make_fallback_reply()
 
     except Exception as e:
         print("[AI ERROR]", e)
