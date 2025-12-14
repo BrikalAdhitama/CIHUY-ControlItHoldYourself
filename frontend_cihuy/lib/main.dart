@@ -39,23 +39,6 @@ Future<void> main() async {
   await NotificationService.init();
   await FcmService.init();
 
-  // ==================================================================
-  // 🔥🔥🔥 SCRIPT UNTUK MENDAPATKAN FCM TOKEN (Copy Tokennya) 🔥🔥🔥
-  // ==================================================================
-  try {
-    // Tunggu sebentar biar firebase siap
-    String? token = await FirebaseMessaging.instance.getToken();
-    print("\n");
-    print("👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇");
-    print("🔥 TOKEN FCM CIHUY 🔥");
-    print(token);
-    print("👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆");
-    print("\n");
-  } catch (e) {
-    print("⚠️ Gagal mengambil token: $e");
-  }
-  // ==================================================================
-
   // THEME PROVIDER
   final themeProvider = await ThemeProvider.create();
 
