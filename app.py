@@ -21,6 +21,7 @@ from supabase import create_client, Client
 
 # ================= GEMINI SDK =================
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 # ================= KONSTANTA =================
 MIN_RESPONSE_DELAY = 2
@@ -73,12 +74,16 @@ model = None
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # [FIX 1] Gunakan model yang stabil (1.5-flash) agar output konsisten
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=SYSTEM_INSTRUCTION
-    )
-    print("[AI] Gemini Ready 🧠")
+    
+    # [FIX 1] Gunakan 'gemini-pro' karena log error sebelumnya menunjukkan 'flash' 404
+    try:
+        model = genai.GenerativeModel(
+            model_name="gemini-pro",
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+        print("[AI] Gemini-Pro Ready 🧠")
+    except Exception as e:
+        print(f"[AI SETUP ERROR] {e}")
 
 # ================= HELPERS =================
 def make_fallback_reply():
@@ -163,7 +168,7 @@ def chat():
             "reply": "Hehe, gue denger kok 😄 Mau lanjut cerita apa?"
         })
 
-    # [FIX 2] Tambahkan instruksi agar jawaban lengkap
+    # [FIX 2] Prompt diperjelas agar jawaban tuntas
     prompt = f"""
 Situasi:
 User sedang berjuang berhenti merokok/vape.
@@ -182,17 +187,26 @@ Jawaban CiHuy:
 """
 
     try:
+        # [FIX 3] Tambahkan safety_settings agar topik rokok tidak kena filter
         response = model.generate_content(
             prompt,
             generation_config={
                 "temperature": 0.85,
-                # [FIX 3] NAIKKAN TOKEN OUTPUT BIAR GAK KEPOTONG
-                "max_output_tokens": 4000 
+                "max_output_tokens": 2048, # Cukup untuk gemini-pro
+            },
+            safety_settings={
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
             }
         )
 
         reply = extract_gemini_text(response)
+        
+        # Debugging jika kosong
         if not reply:
+            print(f"[DEBUG] Empty Response. Feedback: {response.prompt_feedback}")
             reply = make_fallback_reply()
 
     except Exception as e:
