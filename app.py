@@ -13,10 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ================= IMPORT MODUL SENDIRI =================
-# Pastikan file fcm.py ada di folder yang sama
-from fcm import send_fcm, send_fcm_broadcast
-
-# ================= SUPABASE =================
+from fcm import send_fcm_broadcast
 from supabase import create_client, Client
 
 # ================= GEMINI SDK =================
@@ -24,7 +21,6 @@ import google.generativeai as genai
 
 # ================= KONSTANTA =================
 MIN_RESPONSE_DELAY = 2
-MAX_RESPONSE_TIME = 30
 
 # ================= APP INIT =================
 app = Flask(__name__)
@@ -35,24 +31,12 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client | None = None
-try:
-    if SUPABASE_URL and SUPABASE_KEY:
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         print("[DB] Supabase Connected ⚡")
-except Exception as e:
-    print("[DB ERROR]", e)
-    supabase = None
-
-# ================= SYSTEM INSTRUCTION (FINAL) =================
-SYSTEM_INSTRUCTION = (
-    "Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
-    "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat, bukan seperti bot atau konselor formal. "
-    "Jawaban boleh panjang jika memang dibutuhkan, tapi harus jelas, relevan, dan tidak bertele-tele. "
-    "Fokus utama percakapan adalah: proses berhenti merokok/vape, craving, gejala awal berhenti, motivasi, dan manajemen stres. "
-    "Selalu berikan langkah konkret dan praktis. "
-    "Jangan menghakimi. Jangan memberikan diagnosis medis berat. "
-    "Jika percakapan keluar topik, arahkan kembali secara natural ke kesehatan."
-)
+    except Exception as e:
+        print("[DB ERROR]", e)
 
 # ================= GEMINI CONFIG =================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -60,24 +44,18 @@ model = None
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    
-    # [FIX] Gunakan gemini-1.5-flash (Versi library barumu sudah support ini)
-    # Ini lebih cepat dan kuota tokennya lebih besar daripada Pro
     try:
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash", 
-            system_instruction=SYSTEM_INSTRUCTION
-        )
+        model = genai.GenerativeModel("gemini-1.5-flash")
         print("[AI] Gemini-1.5-Flash Ready 🧠")
     except Exception as e:
-        print(f"[AI SETUP ERROR] {e}")
+        print("[AI SETUP ERROR]", e)
 
 # ================= HELPERS =================
 def make_fallback_reply():
     return random.choice([
-        "Waduh, koneksi gue agak gangguan nih. Coba tanya lagi ya.",
-        "Bentar, sinyal otak gue putus nyambung. Coba ulangi pertanyaannya.",
-        "Sori banget, tadi kepotong. Mau nanya apa tadi?"
+        "Bentar ya, gue nangkepin dulu ceritamu.",
+        "Kayaknya tadi kepotong. Coba ceritain lagi dikit.",
+        "Gue masih di sini kok, lanjut aja ceritanya."
     ])
 
 def extract_gemini_text(response):
@@ -85,10 +63,10 @@ def extract_gemini_text(response):
         if hasattr(response, "text") and response.text:
             return response.text.strip()
         if hasattr(response, "candidates"):
-            for cand in response.candidates:
-                for part in cand.content.parts:
-                    if hasattr(part, "text") and part.text:
-                        return part.text.strip()
+            for c in response.candidates:
+                for p in c.content.parts:
+                    if hasattr(p, "text"):
+                        return p.text.strip()
     except:
         pass
     return None
@@ -99,9 +77,8 @@ def get_users_by_zona(zona: str):
         return []
     try:
         res = supabase.table("users").select("token").eq("zona", zona).execute()
-        return list({row["token"] for row in res.data})
-    except Exception as e:
-        print(f"[DB ERROR get_users] {e}")
+        return list({r["token"] for r in res.data})
+    except:
         return []
 
 # ================= SCHEDULER JOB =================
@@ -109,17 +86,19 @@ def job_kirim_per_zona(sesi: str, zona: str):
     tokens = get_users_by_zona(zona)
     if not tokens:
         return
+
     pesan = {
-        "pagi": "Pagi! Tarik napas dulu. Hari baru, kesempatan baru 🌱",
-        "siang": "Masih bertahan? Itu keren banget 💪",
-        "malam": "Hari ini berat? Terima kasih udah bertahan 🤍"
+        "pagi": "Pagi! Tarik napas dulu. Hari baru 🌱",
+        "siang": "Masih bertahan? Itu keren 💪",
+        "malam": "Hari ini berat? Makasih udah bertahan 🤍"
     }
+
     send_fcm_broadcast(tokens, "CIHUY", pesan.get(sesi, "Semangat ya"))
 
 # ================= SCHEDULER =================
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
-# Jadwal cron (biarkan saja seperti aslinya)
+
 scheduler.add_job(job_kirim_per_zona, "cron", hour=8, args=["pagi", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=7, args=["pagi", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=6, args=["pagi", "WIT"])
@@ -145,50 +124,42 @@ def chat():
     if not message:
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
-    if len(message) < 2:
-        return jsonify({"success": True, "reply": "Hadir! Mau cerita apa?"})
-
-    # Prompt Tegas
     prompt = f"""
-Situasi: User ingin berhenti merokok.
-Pesan user: {message}
+Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape.
 
-Instruksi:
-Jawab sebagai CiHuy (teman santai & supportif).
-Berikan jawaban UTUH, JELAS, dan SOLUTIF.
-JANGAN MEMOTONG KALIMAT.
+Gaya bicara:
+- Seperti manusia, hangat, santai, empatik
+- Jangan jawab singkat
+- Jangan template
+- Jangan menggurui
+
+Aturan penting:
+- Jawaban minimal 3 paragraf
+- Setiap paragraf 2–3 kalimat
+- Langsung kasih langkah konkret
+- Jangan memotong jawaban
+- Jangan tanya balik kecuali perlu
+
+Pesan user:
+{message}
+
+Jawaban CiHuy:
 """
 
     reply = None
-    
+
     if model:
         try:
-            # [FIX SAFETY] Pakai format List of Dict (Raw String)
-            # Ini paling kompatibel buat semua versi library
-            safe_list = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ]
-
             response = model.generate_content(
                 prompt,
                 generation_config={
                     "temperature": 0.85,
-                    "max_output_tokens": 4000, # Flash kuat sampai 8000, kita set 4000 aman
-                },
-                safety_settings=safe_list
+                    "max_output_tokens": 3000,
+                }
             )
-
             reply = extract_gemini_text(response)
-            
-            if not reply:
-                print(f"[DEBUG AI] Response Feedback: {response.prompt_feedback}")
-        
         except Exception as e:
-            print(f"[AI ERROR FATAL] {e}")
-            reply = None
+            print("[AI ERROR]", e)
 
     if not reply:
         reply = make_fallback_reply()
