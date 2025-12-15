@@ -206,6 +206,8 @@ def chat():
     if not model:
         return jsonify({"success": False, "reply": "AI belum siap"}), 500
 
+    start_time = time.time()
+
     data = request.get_json() or {}
     message = (data.get("message") or "").strip()
 
@@ -237,17 +239,25 @@ Jawaban CiHuy:
         )
 
         reply = extract_gemini_text(response)
+
         if not reply:
             reply = make_fallback_reply()
 
-        # delay biar lebih manusiawi
-        time.sleep(2)
+        # ================= TIME GUARD =================
+        elapsed = time.time() - start_time
+        if elapsed < 2:
+            time.sleep(2)  # tetap human-like
+        elif elapsed > MAX_RESPONSE_TIME:
+            print("[AI WARNING] Response time exceeded 30s")
 
     except Exception as e:
         print("[AI ERROR]", e)
         reply = make_fallback_reply()
 
-    return jsonify({"success": True, "reply": reply})
+    return jsonify({
+        "success": True,
+        "reply": reply
+    })
 
 
 # ================= MAIN =================
