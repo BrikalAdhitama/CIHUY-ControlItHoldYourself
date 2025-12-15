@@ -13,7 +13,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ================= IMPORT MODUL SENDIRI =================
-from fcm import send_fcm_broadcast
+# Pastikan file fcm.py ada di folder yang sama
+try:
+    from fcm import send_fcm, send_fcm_broadcast
+except ImportError:
+    # Fallback biar app gak crash kalau fcm.py error
+    def send_fcm_broadcast(*args, **kwargs): pass
+    def send_fcm(*args, **kwargs): pass
+
+# ================= SUPABASE =================
 from supabase import create_client, Client
 
 # ================= GEMINI SDK =================
@@ -21,6 +29,7 @@ import google.generativeai as genai
 
 # ================= KONSTANTA =================
 MIN_RESPONSE_DELAY = 2
+MAX_RESPONSE_TIME = 30
 
 # ================= APP INIT =================
 app = Flask(__name__)
@@ -31,12 +40,24 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client | None = None
-if SUPABASE_URL and SUPABASE_KEY:
-    try:
+try:
+    if SUPABASE_URL and SUPABASE_KEY:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         print("[DB] Supabase Connected ⚡")
-    except Exception as e:
-        print("[DB ERROR]", e)
+except Exception as e:
+    print("[DB ERROR]", e)
+    supabase = None
+
+# ================= SYSTEM INSTRUCTION (FINAL) =================
+SYSTEM_INSTRUCTION = (
+    "Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
+    "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat, bukan seperti bot atau konselor formal. "
+    "Jawaban boleh panjang jika memang dibutuhkan, tapi harus jelas, relevan, dan tidak bertele-tele. "
+    "Fokus utama percakapan adalah: proses berhenti merokok/vape, craving, gejala awal berhenti, motivasi, dan manajemen stres. "
+    "Selalu berikan langkah konkret dan praktis. "
+    "Jangan menghakimi. Jangan memberikan diagnosis medis berat. "
+    "Jika percakapan keluar topik, arahkan kembali secara natural ke kesehatan."
+)
 
 # ================= GEMINI CONFIG =================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -44,18 +65,24 @@ model = None
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+    
+    # [UBAH DISINI] Ganti ke gemini-1.5-pro
+    # Pastikan requirements.txt kamu sudah google-generativeai>=0.8.3
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        print("[AI] Gemini-1.5-Flash Ready 🧠")
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-pro", 
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+        print("[AI] Gemini-1.5-PRO Ready (Mode Pintar) 🧠")
     except Exception as e:
-        print("[AI SETUP ERROR]", e)
+        print(f"[AI SETUP ERROR] {e}")
 
 # ================= HELPERS =================
 def make_fallback_reply():
     return random.choice([
-        "Bentar ya, gue nangkepin dulu ceritamu.",
-        "Kayaknya tadi kepotong. Coba ceritain lagi dikit.",
-        "Gue masih di sini kok, lanjut aja ceritanya."
+        "Waduh, koneksi gue agak gangguan nih. Coba tanya lagi ya.",
+        "Bentar, sinyal otak gue putus nyambung. Coba ulangi pertanyaannya.",
+        "Sori banget, tadi kepotong. Mau nanya apa tadi?"
     ])
 
 def extract_gemini_text(response):
@@ -63,10 +90,10 @@ def extract_gemini_text(response):
         if hasattr(response, "text") and response.text:
             return response.text.strip()
         if hasattr(response, "candidates"):
-            for c in response.candidates:
-                for p in c.content.parts:
-                    if hasattr(p, "text"):
-                        return p.text.strip()
+            for cand in response.candidates:
+                for part in cand.content.parts:
+                    if hasattr(part, "text") and part.text:
+                        return part.text.strip()
     except:
         pass
     return None
@@ -77,8 +104,9 @@ def get_users_by_zona(zona: str):
         return []
     try:
         res = supabase.table("users").select("token").eq("zona", zona).execute()
-        return list({r["token"] for r in res.data})
-    except:
+        return list({row["token"] for row in res.data})
+    except Exception as e:
+        print(f"[DB ERROR get_users] {e}")
         return []
 
 # ================= SCHEDULER JOB =================
@@ -86,13 +114,11 @@ def job_kirim_per_zona(sesi: str, zona: str):
     tokens = get_users_by_zona(zona)
     if not tokens:
         return
-
     pesan = {
-        "pagi": "Pagi! Tarik napas dulu. Hari baru 🌱",
-        "siang": "Masih bertahan? Itu keren 💪",
-        "malam": "Hari ini berat? Makasih udah bertahan 🤍"
+        "pagi": "Pagi! Tarik napas dulu. Hari baru, kesempatan baru 🌱",
+        "siang": "Masih bertahan? Itu keren banget 💪",
+        "malam": "Hari ini berat? Terima kasih udah bertahan 🤍"
     }
-
     send_fcm_broadcast(tokens, "CIHUY", pesan.get(sesi, "Semangat ya"))
 
 # ================= SCHEDULER =================
@@ -124,6 +150,10 @@ def chat():
     if not message:
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
+    if len(message) < 2:
+        return jsonify({"success": True, "reply": "Hadir! Mau cerita apa?"})
+
+    # Prompt
     prompt = f"""
 Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape.
 
@@ -139,6 +169,7 @@ Aturan penting:
 - Langsung kasih langkah konkret
 - Jangan memotong jawaban
 - Jangan tanya balik kecuali perlu
+- PASTIKAN JAWABAN LENGKAP.
 
 Pesan user:
 {message}
@@ -147,19 +178,34 @@ Jawaban CiHuy:
 """
 
     reply = None
-
+    
     if model:
         try:
+            # [FIX SAFETY] Wajib ada biar rokok gak diblokir
+            safe_list = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+
             response = model.generate_content(
                 prompt,
                 generation_config={
-                    "temperature": 0.85,
-                    "max_output_tokens": 3000,
-                }
+                    "temperature": 0.85, # Agak kreatif dikit
+                    "max_output_tokens": 4000, # Pro support 8k+, jadi 4k aman banget
+                },
+                safety_settings=safe_list
             )
+
             reply = extract_gemini_text(response)
+            
+            if not reply:
+                print(f"[DEBUG AI] Response Feedback: {response.prompt_feedback}")
+        
         except Exception as e:
-            print("[AI ERROR]", e)
+            print(f"[AI ERROR FATAL] {e}")
+            reply = None
 
     if not reply:
         reply = make_fallback_reply()
