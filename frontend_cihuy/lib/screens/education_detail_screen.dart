@@ -1,4 +1,3 @@
-// lib/screens/education_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
@@ -24,7 +23,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   bool _loadingMarkdown = false;
 
   // =======================
-  // GETTER DATA DASAR
+  // GETTER DATA
   // =======================
 
   String get _title =>
@@ -53,16 +52,12 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     return s.isEmpty ? null : s;
   }
 
-  /// URL ke file .md di Supabase Storage
   String? get _markdownUrl {
-    // support beberapa nama kolom biar ga rewel
     final candidates = ['markdown_url', 'md_url', 'md_link'];
-
     for (final key in candidates) {
       final v = widget.item[key];
-      if (v != null) {
-        final s = v.toString().trim();
-        if (s.isNotEmpty) return s;
+      if (v != null && v.toString().trim().isNotEmpty) {
+        return v.toString().trim();
       }
     }
     return null;
@@ -76,16 +71,10 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   void initState() {
     super.initState();
 
-    // debug kalau perlu
-    // debugPrint('ITEM DETAIL = ${widget.item}');
-    // debugPrint('MARKDOWN URL = ${_markdownUrl}');
-
-    // YouTube
     if (_videoUrl != null) {
       _initYoutube(_videoUrl!);
     }
 
-    // Markdown dari Supabase Storage
     if (_markdownUrl != null) {
       _fetchMarkdownFromUrl(_markdownUrl!);
     }
@@ -99,7 +88,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
 
   void _initYoutube(String url) {
     final id = YoutubePlayer.convertUrlToId(url);
-    if (id == null || id.isEmpty) return;
+    if (id == null) return;
 
     _ytController = YoutubePlayerController(
       initialVideoId: id,
@@ -109,9 +98,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
       ),
     )..addListener(() {
         if (!_ytReady && mounted) {
-          setState(() {
-            _ytReady = true;
-          });
+          setState(() => _ytReady = true);
         }
       });
   }
@@ -122,30 +109,20 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
       final res = await http.get(Uri.parse(url));
       if (res.statusCode == 200) {
         _markdownRemote = res.body;
-      } else {
-        // kalau gagal, biarin aja fallback ke summary / content_markdown
       }
-    } catch (_) {
-      // diem aja, jangan bikin crash
-    } finally {
-      if (mounted) {
-        setState(() => _loadingMarkdown = false);
-      }
+    } catch (_) {}
+    finally {
+      if (mounted) setState(() => _loadingMarkdown = false);
     }
   }
 
   Future<void> _launchExternal(Uri uri) async {
     try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal membuka link eksternal.')),
-        );
-      }
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal membuka link eksternal.')),
+        const SnackBar(content: Text('Gagal membuka link')),
       );
     }
   }
@@ -161,83 +138,35 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   }
 
   // =======================
-  // WIDGET VIDEO YT
+  // VIDEO
   // =======================
 
   Widget _buildVideoArea() {
     final url = _videoUrl!;
     if (_ytController == null) {
-      // gagal parse ID → tombol buka YouTube aja
       return SizedBox(
         height: 220,
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.ondemand_video_outlined,
-                  size: 36, color: Colors.grey),
-              const SizedBox(height: 8),
-              const Text('Tidak dapat menampilkan video di dalam aplikasi.'),
-              const SizedBox(height: 6),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('Buka di YouTube / Browser'),
-                onPressed: () => _launchExternal(Uri.parse(url)),
-              ),
-            ],
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Buka Video'),
+            onPressed: () => _launchExternal(Uri.parse(url)),
           ),
         ),
       );
     }
 
-    return YoutubePlayerBuilder(
-      player: YoutubePlayer(
-        controller: _ytController!,
-        showVideoProgressIndicator: true,
-      ),
-      builder: (context, player) {
-        return Column(
-          children: [
-            SizedBox(
-              height: 220,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: player,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                TextButton.icon(
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('Buka di aplikasi eksternal'),
-                  onPressed: () => _launchExternal(Uri.parse(url)),
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'Refresh video',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    _ytController!.reload();
-                  },
-                ),
-              ],
-            ),
-          ],
-        );
-      },
+    return YoutubePlayer(
+      controller: _ytController!,
+      showVideoProgressIndicator: true,
     );
   }
 
   // =======================
-  // WIDGET MARKDOWN
+  // MARKDOWN
   // =======================
 
   Widget _buildMarkdownContent() {
-    // Prioritas:
-    // 1. markdown yang di-download dari URL
-    // 2. content_markdown dari DB
-    // 3. summary kalau dua-duanya kosong
     final md = _markdownRemote.isNotEmpty
         ? _markdownRemote
         : (_contentFromDb.isNotEmpty ? _contentFromDb : _summary);
@@ -245,14 +174,13 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     if (md.trim().isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(20),
-        child: Text('Konten belum tersedia.'),
+        child: Text('Konten belum tersedia'),
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_loadingMarkdown)
             const LinearProgressIndicator(minHeight: 2),
@@ -260,8 +188,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
           MarkdownBody(
             data: md,
             styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-              p: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
-              listBullet: Theme.of(context).textTheme.bodyMedium,
+              p: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    height: 1.45,
+                  ),
             ),
           ),
         ],
@@ -275,6 +204,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final updated = _prettyDate(_updatedRaw);
 
     return Scaffold(
@@ -284,13 +214,11 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
           if (_videoUrl != null)
             IconButton(
               icon: const Icon(Icons.ondemand_video),
-              tooltip: 'Buka video di aplikasi eksternal',
               onPressed: () => _launchExternal(Uri.parse(_videoUrl!)),
             ),
           if (_pdfUrl != null)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Buka PDF',
               onPressed: () {
                 Navigator.push(
                   context,
@@ -327,50 +255,54 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
                 if (updated.isNotEmpty)
                   Text(
                     updated,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white54 : Colors.black54,
+                    ),
                   ),
               ],
             ),
           ),
 
-          // SUMMARY PENDEK
+          // ================= FIXED SUMMARY =================
           if (_summary.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.black.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Text(
                 _summary,
-                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
               ),
             ),
 
           const SizedBox(height: 8),
 
-          // VIDEO (kalau ada)
           if (_videoUrl != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _buildVideoArea(),
             ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // PDF CARD (kalau ada)
           if (_pdfUrl != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 child: ListTile(
                   leading: const Icon(Icons.picture_as_pdf,
                       color: Colors.redAccent),
                   title: const Text('Buka dokumen PDF'),
-                  subtitle: Text(
-                    Uri.parse(_pdfUrl!).path.split('/').last,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
                     Navigator.push(
@@ -389,8 +321,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
             ),
 
           const SizedBox(height: 12),
-
-          // MARKDOWN (MD artikel / long text)
           _buildMarkdownContent(),
         ],
       ),

@@ -350,18 +350,29 @@ class AuthService {
     }
   }
 
-  // --- AMBIL RIWAYAT 7 HARI (UNTUK HOME) ---
+  // --- AMBIL RIWAYAT 7 HARI (YANG DIPERBAIKI) ---
   static Future<List<Map<String, dynamic>>> get7DayHistory() async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return [];
 
-      final nowLocal = DateTime.now();
+      // Ambil tanggal user join untuk validasi (agar user baru ga langsung hijau semua)
+      DateTime? userJoinDate;
+      if (user.createdAt.isNotEmpty) {
+        try {
+          final parsed = DateTime.parse(user.createdAt).toLocal();
+          // Kita ambil tanggalnya saja (tanpa jam) biar adil
+          userJoinDate = DateTime(parsed.year, parsed.month, parsed.day);
+        } catch (_) {}
+      }
 
+      final nowLocal = DateTime.now();
       List<Map<String, dynamic>> history = [];
 
       for (int i = 6; i >= 0; i--) {
         final d = nowLocal.subtract(Duration(days: i));
+        // Normalisasi tanggal yang sedang dicek (tanpa jam)
+        final currentDateOnly = DateTime(d.year, d.month, d.day);
 
         final dateString = '${d.year.toString().padLeft(4, '0')}-'
             '${d.month.toString().padLeft(2, '0')}-'
@@ -377,6 +388,7 @@ class AuthService {
         String detail;
 
         if (rows != null && rows.isNotEmpty) {
+          // --- ADA DATA DI DB (Biasanya Relapse) ---
           bool anyRelapse = false;
           int totalCigs = 0;
           int totalVape = 0;
@@ -395,8 +407,27 @@ class AuthService {
           if (totalVape > 0) parts.add('$totalVape hisapan vape');
           detail = parts.isNotEmpty ? parts.join(', ') : 'Kambuh';
         } else {
-          status = 'neutral';
-          detail = '';
+          // --- TIDAK ADA DATA DI DB (Harusnya Sukses) ---
+          
+          // Logika Baru:
+          // 1. Jika tanggal ini < tanggal join user -> Netral (belum main app)
+          // 2. Jika tanggal ini >= tanggal join user -> Sukses (Hijau)
+          
+          bool isBeforeJoin = false;
+          if (userJoinDate != null) {
+            // Jika tanggal yg dicek lebih kecil dari tanggal join
+            if (currentDateOnly.isBefore(userJoinDate)) {
+              isBeforeJoin = true;
+            }
+          }
+
+          if (isBeforeJoin) {
+            status = 'neutral';
+            detail = '';
+          } else {
+            status = 'success'; // <--- INI KUNCI PERBAIKANNYA
+            detail = 'Bebas (sukses)';
+          }
         }
 
         history.add({

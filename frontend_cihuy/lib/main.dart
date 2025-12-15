@@ -139,82 +139,94 @@ class MyApp extends StatelessWidget {
     );
 
     // ============= DARK THEME (HIJAU SOFT) =============
-    final darkTheme = ThemeData(
-      useMaterial3: true,
-      colorScheme: darkScheme,
+  final darkTheme = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
 
-      // background utama lebih terang, hijau gelap soft
-      scaffoldBackgroundColor: const Color(0xFF263833),
+    // ⬛ Background utama (hitam elegan)
+    scaffoldBackgroundColor: const Color(0xFF121212),
 
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF263833),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: Colors.white),
-        titleTextStyle: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFF121212),
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      iconTheme: IconThemeData(color: Colors.white),
+      titleTextStyle: TextStyle(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
       ),
+    ),
 
-      // teks default di dark mode
-      textTheme: const TextTheme(
-        bodyMedium: TextStyle(color: Colors.white),
-        bodyLarge: TextStyle(color: Colors.white),
-      ),
+    // 📝 Text default
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Colors.white),
+      bodyMedium: TextStyle(color: Colors.white70),
+    ),
 
-      textSelectionTheme: const TextSelectionThemeData(
-        cursorColor: accentTeal,
-        selectionColor: Color(0xFF3C5E57),
-        selectionHandleColor: accentTeal,
-      ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: accentTeal,
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentTeal,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: accentTeal, width: 2),
-          foregroundColor: accentTeal,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: accentTeal,
-        ),
-      ),
+    textSelectionTheme: const TextSelectionThemeData(
+      cursorColor: Color(0xFF4DB6AC),
+      selectionColor: Color(0x334DB6AC),
+      selectionHandleColor: Color(0xFF4DB6AC),
+    ),
 
-      // ⬇️ PENTING: Styling TextField di DARK MODE
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        // warna isi textfield di dark
-        fillColor: const Color(0xFF2F4842),
-        hintStyle: const TextStyle(color: Colors.white70),
-        labelStyle: const TextStyle(color: Colors.white70),
-        prefixIconColor: accentTeal,
-        enabledBorder: OutlineInputBorder(
+    // 🔘 Button utama
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Color(0xFF4DB6AC),
+        foregroundColor: Colors.black,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(30),
-          borderSide:
-              BorderSide(color: Colors.white.withOpacity(0.25), width: 1.2),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
-          borderSide: const BorderSide(color: accentTeal, width: 1.6),
         ),
       ),
-    );
+    ),
+
+    // 🔘 Button outline
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: Color(0xFF4DB6AC), width: 1.5),
+        foregroundColor: Color(0xFF4DB6AC),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(30),
+        ),
+      ),
+    ),
+
+    // 🔗 TextButton (Lupa password?)
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF4DB6AC),
+        textStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ),
+
+    // ⌨️ TextField DARK LOGIN STYLE
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFF1E1E1E),
+      hintStyle: const TextStyle(color: Colors.white60),
+      labelStyle: const TextStyle(color: Colors.white60),
+      prefixIconColor: const Color(0xFF4DB6AC),
+
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(
+          color: Colors.white.withOpacity(0.2),
+          width: 1.2,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: const BorderSide(
+          color: Color(0xFF4DB6AC),
+          width: 1.6,
+        ),
+      ),
+    ),
+  );
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,

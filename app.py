@@ -48,15 +48,13 @@ except Exception as e:
     print("[DB ERROR]", e)
     supabase = None
 
-# ================= SYSTEM INSTRUCTION (FINAL) =================
+# ================= SYSTEM INSTRUCTION =================
 SYSTEM_INSTRUCTION = (
     "Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
-    "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat, bukan seperti bot atau konselor formal. "
-    "Jawaban boleh panjang jika memang dibutuhkan, tapi harus jelas, relevan, dan tidak bertele-tele. "
-    "Fokus utama percakapan adalah: proses berhenti merokok/vape, craving, gejala awal berhenti, motivasi, dan manajemen stres. "
-    "Selalu berikan langkah konkret dan praktis. "
-    "Jangan menghakimi. Jangan memberikan diagnosis medis berat. "
-    "Jika percakapan keluar topik, arahkan kembali secara natural ke kesehatan."
+    "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat. "
+    "Fokus utama: proses berhenti, craving, motivasi, dan manajemen stres. "
+    "Berikan langkah konkret dan praktis. "
+    "Jangan menghakimi. Jangan memberikan diagnosis medis berat."
 )
 
 # ================= GEMINI CONFIG =================
@@ -65,15 +63,13 @@ model = None
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    
-    # [UBAH DISINI] Ganti ke gemini-1.5-pro
-    # Pastikan requirements.txt kamu sudah google-generativeai>=0.8.3
     try:
+        # [REKOMENDASI TERBAIK] Pakai Flash biar cepet & support token banyak
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro", 
+            model_name="gemini-1.5-flash", 
             system_instruction=SYSTEM_INSTRUCTION
         )
-        print("[AI] Gemini-1.5-PRO Ready (Mode Pintar) 🧠")
+        print("[AI] Gemini-1.5-Flash Ready 🧠")
     except Exception as e:
         print(f"[AI SETUP ERROR] {e}")
 
@@ -124,23 +120,52 @@ def job_kirim_per_zona(sesi: str, zona: str):
 # ================= SCHEDULER =================
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
-
 scheduler.add_job(job_kirim_per_zona, "cron", hour=8, args=["pagi", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=7, args=["pagi", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=6, args=["pagi", "WIT"])
-
 scheduler.add_job(job_kirim_per_zona, "cron", hour=12, args=["siang", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=11, args=["siang", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=10, args=["siang", "WIT"])
-
 scheduler.add_job(job_kirim_per_zona, "cron", hour=19, args=["malam", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=18, args=["malam", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=17, args=["malam", "WIT"])
-
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 # ================= ROUTES =================
+
+# [BAGIAN INI YANG HILANG DI KODEMU TADI]
+# Tanpa route ini, token user gak bakal masuk database!
+@app.route("/register", methods=["POST"])
+def register_user():
+    data = request.get_json() or {}
+    token = data.get("token")
+    zona = data.get("zona", "WIB")
+
+    if not token:
+        return jsonify({"success": False, "message": "Token wajib ada"}), 400
+
+    try:
+        # Logic: Cek dulu, kalau ada update, kalau gak ada insert
+        if supabase:
+            existing = supabase.table("users").select("token").eq("token", token).execute()
+            
+            if existing.data:
+                # Update zonanya aja
+                supabase.table("users").update({"zona": zona}).eq("token", token).execute()
+                print(f"[REGISTER] User Updated: {token[:10]}...")
+            else:
+                # Insert user baru
+                supabase.table("users").insert({"token": token, "zona": zona}).execute()
+                print(f"[REGISTER] New User Saved: {token[:10]}...")
+             
+        return jsonify({"success": True, "message": "Berhasil disimpan"})
+
+    except Exception as e:
+        print(f"[DB REGISTER ERROR] {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     start = time.time()
@@ -150,38 +175,21 @@ def chat():
     if not message:
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
-    if len(message) < 2:
-        return jsonify({"success": True, "reply": "Hadir! Mau cerita apa?"})
-
-    # Prompt
     prompt = f"""
-Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape.
+Situasi: User ingin berhenti merokok.
+Pesan user: {message}
 
-Gaya bicara:
-- Seperti manusia, hangat, santai, empatik
-- Jangan jawab singkat
-- Jangan template
-- Jangan menggurui
-
-Aturan penting:
-- Jawaban minimal 3 paragraf
-- Setiap paragraf 2–3 kalimat
-- Langsung kasih langkah konkret
-- Jangan memotong jawaban
-- Jangan tanya balik kecuali perlu
-- PASTIKAN JAWABAN LENGKAP.
-
-Pesan user:
-{message}
-
-Jawaban CiHuy:
+Instruksi:
+Jawab sebagai CiHuy (teman santai & supportif).
+Berikan jawaban UTUH, JELAS, dan SOLUTIF.
+JANGAN MEMOTONG KALIMAT.
 """
 
     reply = None
     
     if model:
         try:
-            # [FIX SAFETY] Wajib ada biar rokok gak diblokir
+            # SAFETY SETTINGS WAJIB ADA (Biar topik rokok ga diblokir)
             safe_list = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -192,8 +200,8 @@ Jawaban CiHuy:
             response = model.generate_content(
                 prompt,
                 generation_config={
-                    "temperature": 0.85, # Agak kreatif dikit
-                    "max_output_tokens": 4000, # Pro support 8k+, jadi 4k aman banget
+                    "temperature": 0.85,
+                    "max_output_tokens": 4000, 
                 },
                 safety_settings=safe_list
             )

@@ -420,20 +420,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final rokokText = _rokokController.text.trim();
     final vapeText = _vapeController.text.trim();
 
-    final rokokCount = int.tryParse(rokokText) ?? 0;
-    final vapeCount = int.tryParse(vapeText) ?? 0;
+    int? rokokCount;
+    int? vapeCount;
 
-    if (rokokCount == 0 && vapeCount == 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Isi dulu jumlah rokok / hisapan vape-nya.')));
-      return;
+    // ================= VALIDASI INPUT =================
+
+    // Validasi rokok
+    if (rokokText.isNotEmpty) {
+      rokokCount = int.tryParse(rokokText);
+      if (rokokCount == null || rokokCount < 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Jumlah rokok tidak valid.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return; // ⛔ STOP — JANGAN RESET TIMER
+      }
     }
+
+    // Validasi vape
+    if (vapeText.isNotEmpty) {
+      vapeCount = int.tryParse(vapeText);
+      if (vapeCount == null || vapeCount < 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Jumlah hisapan vape tidak valid.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return; // ⛔ STOP — JANGAN RESET TIMER
+      }
+    }
+
+    final safeRokok = rokokCount ?? 0;
+    final safeVape = vapeCount ?? 0;
+
+    // Kalau dua-duanya 0 → tetap error
+    if (safeRokok == 0 && safeVape == 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Isi dulu jumlah rokok / hisapan vape-nya.'),
+        ),
+      );
+      return; // ⛔ STOP
+    }
+
+    // ================= CALL API =================
 
     final dynamic res = await AuthService.resetTimer(
       widget.username,
-      rokok: rokokCount,
-      vape: vapeCount,
+      rokok: safeRokok,
+      vape: safeVape,
     );
 
     bool success = false;
@@ -456,6 +497,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (!mounted) return;
 
+    // ================= SUCCESS =================
     if (success) {
       _rokokController.clear();
       _vapeController.clear();
@@ -472,22 +514,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       await _saveQuitDateLocally(newQuitLocal);
+
       setState(() {
         _quitDate = newQuitLocal;
         _elapsed = Duration.zero;
       });
+
       _startTimer();
-
       await _loadHistoryAndProgress();
-      if (mounted) setState(() {});
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Data tercatat. Jujur itu awal kesembuhan!'),
-          backgroundColor: Colors.orange));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              errMsg ?? 'Gagal me-reset timer (cek koneksi)')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data tercatat. Jujur itu awal kesembuhan!'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } 
+    // ================= FAILED =================
+    else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errMsg ?? 'Gagal me-reset timer (cek koneksi)'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -954,54 +1006,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       "November",
       "Desember"
     ];
+
     final currentMonthYear =
         "${monthNames[today.month - 1]} ${today.year}";
 
-    // 7 hari terakhir: today-6 s/d today
+    // ===== 7 HARI TERAKHIR (today - 6 s/d today)
     final daysToShow = List.generate(
       7,
       (i) => today.subtract(Duration(days: 6 - i)),
     );
 
-    // map dari tanggal (yyyy-MM-dd) -> data history
+    // ===== MAP HISTORY (yyyy-MM-dd -> data)
     final Map<String, Map<String, dynamic>> historyMap = {
       for (final h in _history7Days)
         _normalizeDateKey((h['date'] ?? '') as String): h,
     };
-
-    // ========= CARI RELAPSE PERTAMA DI 7 HARI TERAKHIR =========
-    DateTime? firstRelapseInWindow;
-    for (final h in _history7Days) {
-      final status = (h['status'] as String?) ?? '';
-      if (status != 'relapse') continue;
-
-      final key = _normalizeDateKey((h['date'] ?? '') as String);
-      if (key.isEmpty) continue;
-      final parts = key.split('-');
-      if (parts.length != 3) continue;
-
-      final d = DateTime(
-        int.parse(parts[0]),
-        int.parse(parts[1]),
-        int.parse(parts[2]),
-      );
-
-      // pastikan d memang termasuk 7 hari yang ditampilkan
-      if (daysToShow.any((dd) =>
-          dd.year == d.year &&
-          dd.month == d.month &&
-          dd.day == d.day)) {
-        if (firstRelapseInWindow == null ||
-            d.isBefore(firstRelapseInWindow!)) {
-          firstRelapseInWindow = d;
-        }
-      }
-    }
-
-    // Kalau gak ada relapse sama sekali di 7 hari terakhir,
-    // anggap suksesStart = hari pertama di window
-    final DateTime successStart =
-        firstRelapseInWindow ?? daysToShow.first;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1012,9 +1031,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: Column(
         children: [
+          // ===== HEADER
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Riwayat 7 Hari',
@@ -1041,8 +1060,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const HistoryScreen(),
+                          builder: (context) => const HistoryScreen(),
                         ),
                       );
                     },
@@ -1058,46 +1076,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+
           const SizedBox(height: 15),
+
+          // ===== BULATAN 7 HARI
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: daysToShow.map((date) {
               final key = _dateKeyFromDate(date);
               final data = historyMap[key];
 
+              // ===== STATUS PURE DARI DATA
               String status;
-
-              // future date (harusnya gak kejadian sih, tapi jaga-jaga)
-              if (date.isAfter(today)) {
+              if (data == null) {
                 status = 'neutral';
-              }
-              // sebelum suksesStart -> netral (contoh: 24 sebelum relapse 25)
-              else if (date.isBefore(successStart)) {
-                status = 'neutral';
-              }
-              // kalau hari ini relapse -> relapse
-              else if (data != null &&
-                  ((data['status'] as String?) ?? '') ==
-                      'relapse') {
-                status = 'relapse';
-              }
-              // sisanya (hari ini / masa lalu sesudah suksesStart, tapi bukan relapse)
-              else {
-                status = 'success';
+              } else {
+                status = (data['status'] as String?) ?? 'neutral';
               }
 
               Color circleColor;
               switch (status) {
                 case 'success':
-                  circleColor = const Color(0xFF00796B);
+                  circleColor = const Color(0xFF00796B); // hijau CIHUY
                   break;
                 case 'relapse':
                   circleColor = Colors.redAccent;
                   break;
                 default:
-                  circleColor =
-                      Colors.grey.withOpacity(0.2);
+                  circleColor = Colors.grey.withOpacity(0.25);
               }
 
               final isToday = _isSameDay(date, today);
@@ -1105,16 +1111,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               return GestureDetector(
                 onTap: () {
                   if (data != null &&
-                      (data['detail'] as String?)
-                              ?.isNotEmpty ==
-                          true &&
-                      status != 'neutral') {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(
+                      (data['detail'] as String?)?.isNotEmpty == true) {
+                    ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(data['detail']),
-                        duration:
-                            const Duration(seconds: 2),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   }
@@ -1128,8 +1129,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     shape: BoxShape.circle,
                     border: isToday
                         ? Border.all(
-                            color: Colors.black
-                                .withOpacity(0.3),
+                            color: Colors.black.withOpacity(0.35),
                             width: 1.5,
                           )
                         : null,
@@ -1137,12 +1137,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: Text(
                     '${date.day}',
                     style: TextStyle(
-                      color: (status == 'success' ||
-                              status == 'relapse')
+                      color: (status == 'success' || status == 'relapse')
                           ? Colors.white
-                          : (txtColor == Colors.white
-                              ? Colors.white70
-                              : Colors.black54),
+                          : txtColor.withOpacity(0.6),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1221,117 +1218,125 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildEducationCard(
-      Color bgColor, Color txtColor, bool isDarkMode) {
-    const heroAssetPath =
-        'assets/edu_hero.svg'; // <-- ganti kalau nama file beda
+        Color bgColor, Color txtColor, bool isDarkMode) {
+      const heroAssetPath =
+          'assets/edu_hero.svg'; // <-- ganti kalau nama file beda
 
-    final gradient = LinearGradient(
-      colors: isDarkMode
-          ? const [Color(0xFF1B3C36), Color(0xFF0F2A26)]
-          : const [Color(0xFFB2DFDB), Color(0xFFE0F2F1)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
+      final gradient = LinearGradient(
+        colors: isDarkMode
+            ? const [Color(0xFF1B3C36), Color(0xFF0F2A26)]
+            : const [Color(0xFFB2DFDB), Color(0xFFE0F2F1)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 
-    final titleColor =
-        isDarkMode ? Colors.white : const Color(0xFF004D40);
-    final subtitleColor = isDarkMode
-        ? Colors.white70
-        : const Color(0xFF004D40).withOpacity(0.8);
+      final titleColor =
+          isDarkMode ? Colors.white : const Color(0xFF004D40);
+      final subtitleColor = isDarkMode
+          ? Colors.white70
+          : const Color(0xFF004D40).withOpacity(0.8);
 
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const EducationScreen(),
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: double.infinity,
-        height: 150,
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+      return InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const EducationScreen(),
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 18, vertical: 16),
-          child: Row(
-            children: [
-              // TEKS KIRI
-              Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Edukasi',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: titleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Bahaya Rokok & Vape',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: subtitleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          size: 18,
-                          color: subtitleColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Lihat video & artikel singkat buat bantu kamu berhenti.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: subtitleColor,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              // ILUSTRASI KANAN (SVG KAMU)
-              SizedBox(
-                height: 100,
-                width: 100,
-                child: SvgPicture.asset(
-                  heroAssetPath,
-                  fit: BoxFit.contain,
-                ),
+          );
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          height: 150,
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 18, vertical: 16),
+            child: Row(
+              children: [
+                // TEKS KIRI (TIDAK BERUBAH)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Edukasi',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: titleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Bahaya Rokok & Vape',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: subtitleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.lightbulb_outline,
+                            size: 18,
+                            color: subtitleColor,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Lihat video & artikel singkat buat bantu kamu berhenti.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subtitleColor,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // ===================================================
+                // BAGIAN ILUSTRASI KANAN (YANG DIPERBAIKI)
+                // ===================================================
+                SizedBox(
+                  height: 100,
+                  width: 100,
+                  // Bungkus dengan ClipRRect untuk membuat sudut tumpul
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12), // <-- Atur tingkat tumpul di sini
+                    child: SvgPicture.asset(
+                      heroAssetPath,
+                      // Gunakan BoxFit.cover agar gambar mengisi penuh kotak rounded-nya
+                      fit: BoxFit.cover, 
+                    ),
+                  ),
+                ),
+                // ===================================================
+              ],
+            ),
+          ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }

@@ -1,8 +1,6 @@
-// lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-// import 'package:shared_preferences/shared_preferences.dart'; // Tidak wajib lagi, tapi kalau mau dipakai boleh
 
 import '../providers/theme_provider.dart';
 import '../services/notification_service.dart';
@@ -13,7 +11,6 @@ import 'login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String username;
-
   const SettingsScreen({super.key, required this.username});
 
   @override
@@ -21,104 +18,57 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // static const _kNotifPrefKey = 'pref_notif_enabled'; // Tidak perlu simpan pref manual, ikut izin HP aja
-
   bool _notifEnabled = false;
-  bool _loadingNotifState = true;
-  bool _processingToggle = false;
-  bool _isDeletingAccount = false;
+  bool _loading = true;
+  bool _deleting = false;
 
   @override
   void initState() {
     super.initState();
-    _loadNotifState();
+    _checkNotifPermission();
   }
 
-  // --- PERBAIKAN 1: Cek status notifikasi murni dari Izin HP ---
-  Future<void> _loadNotifState() async {
-    try {
-      // Kita cukup cek apakah user mengizinkan notifikasi di HP-nya
-      final status = await Permission.notification.status;
-      
-      if (!mounted) return;
-      setState(() {
-        _notifEnabled = status.isGranted;
-        _loadingNotifState = false;
-      });
-    } catch (e) {
-      debugPrint('[Settings] _loadNotifState error: $e');
-      if (!mounted) return;
-      setState(() {
-        _loadingNotifState = false;
-      });
-    }
-  }
-
-  // --- PERBAIKAN 2: Toggle hanya mengurus Izin (Tanpa Jadwal Lokal) ---
-  Future<void> _onToggleNotification(bool val) async {
-    if (_processingToggle) return;
-
+  Future<void> _checkNotifPermission() async {
+    final status = await Permission.notification.status;
+    if (!mounted) return;
     setState(() {
-      _processingToggle = true;
+      _notifEnabled = status.isGranted;
+      _loading = false;
     });
-
-    try {
-      if (val) {
-        // User mau NYALAIN -> Minta Izin ke OS
-        // Panggil fungsi request dari NotificationService yang sudah kita fix
-        final granted = await NotificationService.requestPermissions();
-        
-        if (granted) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notifikasi diaktifkan! Menunggu pesan dari server...')),
-          );
-        } else {
-          // Kalau ditolak, suruh buka settings manual
-          if (!mounted) return;
-          _showOpenSettingsDialog();
-        }
-      } else {
-        // User mau MATIIN -> Android modern tidak izinkan aplikasi matikan izin sendiri
-        // Jadi kita arahkan ke settings HP
-        if (!mounted) return;
-        _showOpenSettingsDialog(isTurningOff: true);
-        
-        // Opsional: Bersihkan notif yang lagi nampil di layar
-        await NotificationService.cancelAll();
-      }
-    } catch (e) {
-      debugPrint('Error toggle: $e');
-    } finally {
-      // Refresh status terakhir
-      await _loadNotifState();
-      if (mounted) {
-        setState(() {
-          _processingToggle = false;
-        });
-      }
-    }
   }
 
-  void _showOpenSettingsDialog({bool isTurningOff = false}) {
+  Future<void> _toggleNotif(bool value) async {
+    setState(() => _loading = true);
+    if (value) {
+      final granted = await NotificationService.requestPermissions();
+      if (!mounted) return;
+      if (!granted) _openSettingsDialog();
+    } else {
+      _openSettingsDialog(turningOff: true);
+    }
+    await _checkNotifPermission();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _openSettingsDialog({bool turningOff = false}) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isTurningOff ? 'Matikan Notifikasi' : 'Izin Dibutuhkan'),
+      builder: (_) => AlertDialog(
+        title: Text(turningOff ? 'Matikan Notifikasi' : 'Izin Dibutuhkan'),
         content: Text(
-          isTurningOff
-              ? 'Aplikasi tidak bisa mematikan izin secara otomatis. Silakan matikan manual di Pengaturan.'
-              : 'Notifikasi diblokir. Silakan buka pengaturan aplikasi untuk mengizinkan notifikasi.',
+          turningOff
+              ? 'Android tidak mengizinkan aplikasi mematikan notifikasi sendiri.\n\nSilakan matikan lewat pengaturan HP.'
+              : 'Notifikasi diblokir.\n\nSilakan izinkan lewat pengaturan aplikasi.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(context),
             child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () {
               openAppSettings();
-              Navigator.pop(ctx);
+              Navigator.pop(context);
             },
             child: const Text('Buka Pengaturan'),
           ),
@@ -127,263 +77,245 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ========= HAPUS AKUN (TETAP SAMA) =========
-  Future<void> _confirmDeleteAccount() async {
-    if (_isDeletingAccount) return;
-
-    final ok = await showDialog<bool>(
+  Future<void> _deleteAccount() async {
+    if (_deleting) return;
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus Akun?'),
+      builder: (_) => AlertDialog(
+        title: const Text('Hapus Akun?', style: TextStyle(color: Colors.red)),
         content: const Text(
-          'Akun kamu, riwayat perjalanan, dan data terkait akan dihapus. '
-          'Tindakan ini tidak bisa dibatalkan.\n\nYakin banget mau lanjut?',
+          'Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus secara permanen.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Batal'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Ya, hapus',
-              style: TextStyle(color: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
+            child: const Text('Hapus'),
           ),
         ],
       ),
     );
 
-    if (ok != true) return;
+    if (confirm != true) return;
 
-    setState(() => _isDeletingAccount = true);
-
-    final success = await AuthService.deleteAccount();
+    setState(() => _deleting = true);
+    final ok = await AuthService.deleteAccount();
 
     if (!mounted) return;
-    setState(() => _isDeletingAccount = false);
+    setState(() => _deleting = false);
 
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Akun berhasil dihapus.')),
-      );
-
-      Navigator.of(context).pushAndRemoveUntil(
+    if (ok) {
+      Navigator.pushAndRemoveUntil(
+        context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+        (_) => false,
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gagal menghapus akun. Coba lagi sebentar lagi.'),
-        ),
+        const SnackBar(content: Text('Gagal menghapus akun')),
       );
     }
   }
 
-  Widget _buildSettingsTile({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required Color cardColor,
-    required Color textColor,
-    VoidCallback? onTap,
-    Widget? trailing,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF00796B).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: const Color(0xFF00796B)),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: textColor,
+  // Helper function to build a section card
+  Widget _buildSectionCard(
+      BuildContext context, String title, List<Widget> children) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final titleColor = isDark ? Colors.white70 : Colors.black54;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: titleColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
           ),
         ),
-        trailing: trailing ?? const Icon(Icons.chevron_right, color: Colors.grey),
-        onTap: onTap,
-      ),
+        Card(
+          elevation: 2,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: cardColor,
+          child: Column(
+            children: children,
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.isDarkMode;
+    final theme = context.watch<ThemeProvider>();
+    final isDark = theme.isDarkMode;
 
-    final bgColor = isDark ? const Color(0xFF121212) : Colors.grey[50];
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
-    const primaryTeal = Color(0xFF00796B);
+    final bg = isDark ? const Color(0xFF121212) : Colors.grey.shade50;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    const primaryColor = Color(0xFF00796B);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: bg,
       appBar: AppBar(
-        title: Text(
-          'Pengaturan',
-          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: cardColor,
+        title: Text('Pengaturan',
+            style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+        backgroundColor: bg,
         elevation: 0,
+        scrolledUnderElevation: 0,
         iconTheme: IconThemeData(color: textColor),
+        centerTitle: true,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
-          const Text(
-            'Akun',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildSettingsTile(
-            context: context,
-            icon: Icons.person_outline,
-            title: 'Profil Saya',
-            cardColor: cardColor,
-            textColor: textColor,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ProfileScreen(username: widget.username),
+          _buildSectionCard(
+            context,
+            'AKUN',
+            [
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: primaryColor,
+                  child: Icon(Icons.person_outline, color: Colors.white),
                 ),
-              );
-            },
-          ),
-          _buildSettingsTile(
-            context: context,
-            icon: Icons.lock_outline,
-            title: 'Ganti Password',
-            cardColor: cardColor,
-            textColor: textColor,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ChangePasswordScreen(),
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(height: 30),
-
-          const Text(
-            'Preferensi',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          _buildSettingsTile(
-            context: context,
-            icon: Icons.dark_mode_outlined,
-            title: 'Tema Gelap',
-            cardColor: cardColor,
-            textColor: textColor,
-            trailing: Switch(
-              value: themeProvider.isDarkMode,
-              onChanged: (val) {
-                themeProvider.toggleTheme(val);
-              },
-              activeColor: const Color(0xFF4DB6AC),
-            ),
-          ),
-
-          _buildSettingsTile(
-            context: context,
-            icon: Icons.notifications_active_outlined,
-            title: 'Notifikasi Pengingat',
-            cardColor: cardColor,
-            textColor: textColor,
-            trailing: _loadingNotifState
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Switch(
-                    value: _notifEnabled,
-                    activeColor: primaryTeal,
-                    onChanged: (val) async {
-                      await _onToggleNotification(val);
-                    },
+                title: const Text('Profil Saya'),
+                subtitle: Text(widget.username),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(username: widget.username),
                   ),
+                ),
+              ),
+              const Divider(height: 1, indent: 72),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: primaryColor,
+                  child: Icon(Icons.lock_outline, color: Colors.white),
+                ),
+                title: const Text('Ganti Password'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ChangePasswordScreen(),
+                  ),
+                ),
+              ),
+            ],
           ),
-
-          const SizedBox(height: 30),
-
-          const Text(
-            'Lainnya',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildSettingsTile(
-            context: context,
-            icon: Icons.info_outline,
-            title: 'Tentang Aplikasi',
-            cardColor: cardColor,
-            textColor: textColor,
-            onTap: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'CIHUY',
-                applicationVersion: '1.0.0',
-                applicationLegalese:
-                    'Aplikasi pendamping berhenti merokok & vape.',
-              );
-            },
-          ),
-
-          const SizedBox(height: 30),
-
-          Center(
-            child: _isDeletingAccount
-                ? const CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.red,
-                  )
-                : TextButton(
-                    onPressed: _confirmDeleteAccount,
-                    child: const Text(
-                      'Hapus Akun',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
+          _buildSectionCard(
+            context,
+            'PREFERENSI',
+            [
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.indigo.shade400,
+                  child: const Icon(Icons.dark_mode_outlined, color: Colors.white),
+                ),
+                title: const Text('Tema Gelap'),
+                trailing: Switch(
+                  value: theme.isDarkMode,
+                  onChanged: theme.toggleTheme,
+                  activeColor: primaryColor,
+                ),
+              ),
+              const Divider(height: 1, indent: 72),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.amber.shade600,
+                  child: const Icon(Icons.notifications_active_outlined,
+                      color: Colors.white),
+                ),
+                title: const Text('Notifikasi Pengingat'),
+                subtitle: Text(_notifEnabled ? 'Aktif' : 'Nonaktif'),
+                trailing: _loading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: primaryColor),
+                      )
+                    : Switch(
+                        value: _notifEnabled,
+                        onChanged: _toggleNotif,
+                        activeColor: primaryColor,
                       ),
-                    ),
-                  ),
+              ),
+            ],
+          ),
+          _buildSectionCard(
+            context,
+            'LAINNYA',
+            [
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.grey,
+                  child: Icon(Icons.info_outline, color: Colors.white),
+                ),
+                title: const Text('Tentang Aplikasi'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showAboutDialog(
+                  context: context,
+                  applicationName: 'CIHUY',
+                  applicationVersion: '1.0.0',
+                  applicationIcon: const Icon(Icons.info_outline,
+                      size: 50, color: primaryColor),
+                  applicationLegalese:
+                      'Pendamping berhenti merokok & vape.',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              elevation: 0,
+              color: Colors.red.withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.red.withOpacity(0.3))),
+              child: InkWell(
+                onTap: _deleting ? null : _deleteAccount,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: _deleting
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.red))
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.delete_forever, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text(
+                              'Hapus Akun',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

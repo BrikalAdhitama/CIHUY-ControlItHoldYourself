@@ -135,7 +135,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      // ================= PERBAIKAN APP BAR =================
       appBar: AppBar(
+        // Menggunakan warna background scaffold agar menyatu
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0, // Hilangkan bayangan
+        scrolledUnderElevation: 0, // Hilangkan efek saat discroll
         title: const Text('Teman Curhat CiHuy'),
         actions: [
           IconButton(
@@ -149,8 +154,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+      // =====================================================
       body: Column(
         children: [
+          // ================= CHAT LIST =================
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -182,30 +189,46 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
+          // ================= INPUT CHAT =================
           SafeArea(
             top: false,
             child: Container(
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _controller,
+
+                      // 🔥 FIX: TEXT PANJANG AUTO NUMPuk
+                      maxLines: null,
+                      minLines: 1,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+
                       decoration: InputDecoration(
                         hintText: 'Ceritakan masalahmu...',
+                        filled: true,
+                        fillColor: isDark
+                            ? const Color(0xFF2F4842)
+                            : Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(30),
                           borderSide: BorderSide.none,
                         ),
-                        filled: true,
                       ),
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
                   CircleAvatar(
+                    backgroundColor: const Color(0xFF00796B),
                     child: IconButton(
-                      icon: const Icon(Icons.send),
+                      icon: const Icon(Icons.send, color: Colors.white),
                       onPressed: _isLoading ? null : _sendMessage,
                     ),
                   ),
@@ -218,28 +241,46 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // ================= CHAT BUBBLE =================
   Widget _buildBubble(
     BuildContext context,
     String text,
     bool isUser,
     DateTime createdAt,
   ) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    const userBubble = Color(0xFF00796B); // CIHUY GREEN
+    const botBubbleDark = Color(0xFF263833);
+    // ================= PERBAIKAN WARNA BUBBLE =================
+    // Ganti jadi putih biar kontras dengan background
+    const botBubbleLight = Colors.white;
+    // ==========================================================
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
           color: isUser
-              ? theme.colorScheme.primary
-              : (isDark ? const Color(0xFF1E1E1E) : Colors.grey[200]),
+              ? userBubble
+              : (isDark ? botBubbleDark : botBubbleLight),
           borderRadius: BorderRadius.circular(16),
+          boxShadow: isUser || isDark
+              ? null
+              : [
+                  // Tambah sedikit bayangan halus untuk bubble putih
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,12 +288,17 @@ class _ChatScreenState extends State<ChatScreen> {
             isUser
                 ? Text(
                     text,
-                    style: const TextStyle(color: Colors.white),
+                    softWrap: true,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                    ),
                   )
                 : MarkdownBody(
                     data: text,
                     styleSheet: MarkdownStyleSheet(
                       p: TextStyle(
+                        fontSize: 15,
                         color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
