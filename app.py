@@ -21,7 +21,6 @@ from supabase import create_client, Client
 
 # ================= GEMINI SDK =================
 import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 # ================= KONSTANTA =================
 MIN_RESPONSE_DELAY = 2
@@ -48,24 +47,11 @@ except Exception as e:
 SYSTEM_INSTRUCTION = (
     "Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
     "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat, bukan seperti bot atau konselor formal. "
-
     "Jawaban boleh panjang jika memang dibutuhkan, tapi harus jelas, relevan, dan tidak bertele-tele. "
-    "Hindari basa-basi yang tidak perlu, pujian berlebihan, atau kalimat pembuka yang diulang-ulang. "
-
-    "Fokus utama percakapan adalah: proses berhenti merokok/vape, craving, gejala awal berhenti, emosi yang naik turun, "
-    "motivasi, kebiasaan pengganti, manajemen stres, serta edukasi ringan tentang dampak rokok dan vape. "
-
-    "Selalu berikan langkah konkret dan praktis yang bisa langsung dicoba, bukan hanya teori umum. "
-    "Jika user bertanya 'ada saran' atau mengulang pertanyaan, langsung jawab inti tanpa mengulang empati yang sama. "
-
-    "Boleh memvalidasi emosi pengguna, tapi cukup singkat dan jangan berulang. "
-    "Jika user bercanda atau jawab singkat, tanggapi santai tanpa menggurui. "
-    "Jika user serius atau sedang struggle, tanggapi dengan empati yang tenang dan solutif. "
-
-    "Jangan menghakimi, jangan menyalahkan, dan jangan membuat pengguna merasa gagal. "
-    "Jangan memberikan diagnosis medis atau saran medis berat; jika topik sudah serius, arahkan secara halus ke tenaga profesional. "
-
-    "Jika percakapan mulai keluar topik, arahkan kembali secara natural ke proses berhenti merokok atau kesehatan."
+    "Fokus utama percakapan adalah: proses berhenti merokok/vape, craving, gejala awal berhenti, motivasi, dan manajemen stres. "
+    "Selalu berikan langkah konkret dan praktis. "
+    "Jangan menghakimi. Jangan memberikan diagnosis medis berat. "
+    "Jika percakapan keluar topik, arahkan kembali secara natural ke kesehatan."
 )
 
 # ================= GEMINI CONFIG =================
@@ -75,29 +61,29 @@ model = None
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # [FIX 1] Gunakan 'gemini-pro' karena log error sebelumnya menunjukkan 'flash' 404
+    # [FIX] Gunakan gemini-1.5-flash (Versi library barumu sudah support ini)
+    # Ini lebih cepat dan kuota tokennya lebih besar daripada Pro
     try:
         model = genai.GenerativeModel(
-            model_name="gemini-pro",
+            model_name="gemini-1.5-flash", 
             system_instruction=SYSTEM_INSTRUCTION
         )
-        print("[AI] Gemini-Pro Ready 🧠")
+        print("[AI] Gemini-1.5-Flash Ready 🧠")
     except Exception as e:
         print(f"[AI SETUP ERROR] {e}")
 
 # ================= HELPERS =================
 def make_fallback_reply():
     return random.choice([
-        "Gue masih di sini. Coba ceritain lagi dikit, gue dengerin.",
-        "Sebentar ya, kayaknya tadi kepotong. Lanjutin aja.",
-        "Santai, gue nangkep kok. Ulangin pelan-pelan."
+        "Waduh, koneksi gue agak gangguan nih. Coba tanya lagi ya.",
+        "Bentar, sinyal otak gue putus nyambung. Coba ulangi pertanyaannya.",
+        "Sori banget, tadi kepotong. Mau nanya apa tadi?"
     ])
 
 def extract_gemini_text(response):
     try:
         if hasattr(response, "text") and response.text:
             return response.text.strip()
-
         if hasattr(response, "candidates"):
             for cand in response.candidates:
                 for part in cand.content.parts:
@@ -123,19 +109,17 @@ def job_kirim_per_zona(sesi: str, zona: str):
     tokens = get_users_by_zona(zona)
     if not tokens:
         return
-
     pesan = {
         "pagi": "Pagi! Tarik napas dulu. Hari baru, kesempatan baru 🌱",
         "siang": "Masih bertahan? Itu keren banget 💪",
         "malam": "Hari ini berat? Terima kasih udah bertahan 🤍"
     }
-
     send_fcm_broadcast(tokens, "CIHUY", pesan.get(sesi, "Semangat ya"))
 
 # ================= SCHEDULER =================
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
-
+# Jadwal cron (biarkan saja seperti aslinya)
 scheduler.add_job(job_kirim_per_zona, "cron", hour=8, args=["pagi", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=7, args=["pagi", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=6, args=["pagi", "WIT"])
@@ -152,7 +136,6 @@ scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 # ================= ROUTES =================
-# ================= ROUTES =================
 @app.route("/chat", methods=["POST"])
 def chat():
     start = time.time()
@@ -163,38 +146,25 @@ def chat():
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
     if len(message) < 2:
-        return jsonify({
-            "success": True, 
-            "reply": "Hehe, gue denger kok 😄 Mau lanjut cerita apa?"
-        })
+        return jsonify({"success": True, "reply": "Hadir! Mau cerita apa?"})
 
-    # Prompt
+    # Prompt Tegas
     prompt = f"""
-Situasi:
-User sedang berjuang berhenti merokok/vape.
+Situasi: User ingin berhenti merokok.
+Pesan user: {message}
 
-Aturan:
-- Jangan muter empati
-- Jangan tanya balik kalau user minta saran
-- Langsung kasih solusi praktis
-- Jawab santai & manusiawi
-- PASTIKAN JAWABANMU LENGKAP DAN TIDAK TERPOTONG.
-
-Pesan user:
-{message}
-
-Jawaban CiHuy:
+Instruksi:
+Jawab sebagai CiHuy (teman santai & supportif).
+Berikan jawaban UTUH, JELAS, dan SOLUTIF.
+JANGAN MEMOTONG KALIMAT.
 """
 
     reply = None
-
-    try:
-        # [DEBUG] Print dulu biar tau kalau masuk sini
-        print(f"[AI START] Processing message: {message[:20]}...")
-
-        if model:
-            # [FIX UTAMA] Pake format List of Dictionary manual (String)
-            # Ini anti-gagal buat library versi lama atau baru
+    
+    if model:
+        try:
+            # [FIX SAFETY] Pakai format List of Dict (Raw String)
+            # Ini paling kompatibel buat semua versi library
             safe_list = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -206,23 +176,20 @@ Jawaban CiHuy:
                 prompt,
                 generation_config={
                     "temperature": 0.85,
-                    "max_output_tokens": 2048, 
+                    "max_output_tokens": 4000, # Flash kuat sampai 8000, kita set 4000 aman
                 },
-                safety_settings=safe_list 
+                safety_settings=safe_list
             )
 
             reply = extract_gemini_text(response)
             
-            # Kalau kosong, cek feedbacknya apa
             if not reply:
-                print(f"[DEBUG AI] Response Kosong. Feedback: {response.prompt_feedback}")
+                print(f"[DEBUG AI] Response Feedback: {response.prompt_feedback}")
         
-    except Exception as e:
-        # [PENTING] Cek terminal kamu, errornya apa yang muncul disini?
-        print(f"[AI ERROR FATAL] {e}")
-        reply = None
+        except Exception as e:
+            print(f"[AI ERROR FATAL] {e}")
+            reply = None
 
-    # Logic Fallback
     if not reply:
         reply = make_fallback_reply()
 
