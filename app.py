@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ================= IMPORT MODUL SENDIRI =================
+# Pastikan file fcm.py ada di folder yang sama
 from fcm import send_fcm, send_fcm_broadcast
 
 # ================= SUPABASE =================
@@ -72,8 +73,9 @@ model = None
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+    # [FIX 1] Gunakan model yang stabil (1.5-flash) agar output konsisten
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-1.5-flash",
         system_instruction=SYSTEM_INSTRUCTION
     )
     print("[AI] Gemini Ready 🧠")
@@ -104,8 +106,12 @@ def extract_gemini_text(response):
 def get_users_by_zona(zona: str):
     if not supabase:
         return []
-    res = supabase.table("users").select("token").eq("zona", zona).execute()
-    return list({row["token"] for row in res.data})
+    try:
+        res = supabase.table("users").select("token").eq("zona", zona).execute()
+        return list({row["token"] for row in res.data})
+    except Exception as e:
+        print(f"[DB ERROR get_users] {e}")
+        return []
 
 # ================= SCHEDULER JOB =================
 def job_kirim_per_zona(sesi: str, zona: str):
@@ -157,6 +163,7 @@ def chat():
             "reply": "Hehe, gue denger kok 😄 Mau lanjut cerita apa?"
         })
 
+    # [FIX 2] Tambahkan instruksi agar jawaban lengkap
     prompt = f"""
 Situasi:
 User sedang berjuang berhenti merokok/vape.
@@ -166,6 +173,7 @@ Aturan:
 - Jangan tanya balik kalau user minta saran
 - Langsung kasih solusi praktis
 - Jawab santai & manusiawi
+- PASTIKAN JAWABANMU LENGKAP DAN TIDAK TERPOTONG.
 
 Pesan user:
 {message}
@@ -178,7 +186,8 @@ Jawaban CiHuy:
             prompt,
             generation_config={
                 "temperature": 0.85,
-                "max_output_tokens": 700
+                # [FIX 3] NAIKKAN TOKEN OUTPUT BIAR GAK KEPOTONG
+                "max_output_tokens": 4000 
             }
         )
 
