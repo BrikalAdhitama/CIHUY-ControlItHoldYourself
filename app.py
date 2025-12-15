@@ -152,23 +152,23 @@ scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 # ================= ROUTES =================
+# ================= ROUTES =================
 @app.route("/chat", methods=["POST"])
 def chat():
     start = time.time()
-
     data = request.get_json() or {}
     message = (data.get("message") or "").strip()
 
     if not message:
         return jsonify({"success": False, "reply": "Pesan kosong"}), 400
 
-    if len(message) < 3:
+    if len(message) < 2:
         return jsonify({
-            "success": True,
+            "success": True, 
             "reply": "Hehe, gue denger kok 😄 Mau lanjut cerita apa?"
         })
 
-    # [FIX 2] Prompt diperjelas agar jawaban tuntas
+    # Prompt
     prompt = f"""
 Situasi:
 User sedang berjuang berhenti merokok/vape.
@@ -186,31 +186,44 @@ Pesan user:
 Jawaban CiHuy:
 """
 
+    reply = None
+
     try:
-        # [FIX 3] Tambahkan safety_settings agar topik rokok tidak kena filter
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.85,
-                "max_output_tokens": 2048, # Cukup untuk gemini-pro
-            },
-            safety_settings={
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            }
-        )
+        # [DEBUG] Print dulu biar tau kalau masuk sini
+        print(f"[AI START] Processing message: {message[:20]}...")
 
-        reply = extract_gemini_text(response)
+        if model:
+            # [FIX UTAMA] Pake format List of Dictionary manual (String)
+            # Ini anti-gagal buat library versi lama atau baru
+            safe_list = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+
+            response = model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.85,
+                    "max_output_tokens": 2048, 
+                },
+                safety_settings=safe_list 
+            )
+
+            reply = extract_gemini_text(response)
+            
+            # Kalau kosong, cek feedbacknya apa
+            if not reply:
+                print(f"[DEBUG AI] Response Kosong. Feedback: {response.prompt_feedback}")
         
-        # Debugging jika kosong
-        if not reply:
-            print(f"[DEBUG] Empty Response. Feedback: {response.prompt_feedback}")
-            reply = make_fallback_reply()
-
     except Exception as e:
-        print("[AI ERROR]", e)
+        # [PENTING] Cek terminal kamu, errornya apa yang muncul disini?
+        print(f"[AI ERROR FATAL] {e}")
+        reply = None
+
+    # Logic Fallback
+    if not reply:
         reply = make_fallback_reply()
 
     elapsed = time.time() - start
