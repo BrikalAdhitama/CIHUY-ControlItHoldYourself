@@ -22,6 +22,11 @@ from supabase import create_client, Client
 import google.generativeai as genai
 
 
+# ================= KONSTANTA =================
+MAX_RESPONSE_TIME = 30   # batas logging (detik)
+MIN_RESPONSE_DELAY = 2   # delay biar human-like
+
+
 # ================= APP INIT =================
 app = Flask(__name__)
 CORS(app)
@@ -82,6 +87,8 @@ if GEMINI_API_KEY:
         print("[AI] Gemini Ready 🧠")
     except Exception as e:
         print("[AI ERROR]", e)
+else:
+    print("[AI] GEMINI_API_KEY not found ❌")
 
 
 # ================= HELPERS =================
@@ -239,16 +246,18 @@ Jawaban CiHuy:
         )
 
         reply = extract_gemini_text(response)
-
         if not reply:
             reply = make_fallback_reply()
 
-        # ================= TIME GUARD =================
         elapsed = time.time() - start_time
-        if elapsed < 2:
-            time.sleep(2)  # tetap human-like
-        elif elapsed > MAX_RESPONSE_TIME:
-            print("[AI WARNING] Response time exceeded 30s")
+
+        # delay minimal biar human-like
+        if elapsed < MIN_RESPONSE_DELAY:
+            time.sleep(MIN_RESPONSE_DELAY - elapsed)
+
+        # logging jika terlalu lama
+        if elapsed > MAX_RESPONSE_TIME:
+            print(f"[AI WARNING] Response time {elapsed:.2f}s exceeded limit")
 
     except Exception as e:
         print("[AI ERROR]", e)
