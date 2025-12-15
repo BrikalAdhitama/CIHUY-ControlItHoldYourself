@@ -19,8 +19,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    bool success =
-        await AuthService.sendPasswordResetEmail(_emailController.text);
+    bool success = await AuthService.sendPasswordResetEmail(_emailController.text);
 
     setState(() => _isLoading = false);
 
@@ -30,15 +29,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Kode dikirim! Cek email Anda.'),
-          backgroundColor: Color(0xFF4DB6AC),
+          backgroundColor: Color(0xFF00796B), // Hijau konsisten
         ),
       );
 
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              ResetPasswordScreen(email: _emailController.text),
+          builder: (_) => ResetPasswordScreen(email: _emailController.text),
         ),
       );
     } else {
@@ -53,47 +51,79 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    // 1. Cek Tema
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      // 2. Background Konsisten (Biru Muda di Light, Hitam di Dark)
+      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFE0F2F1),
+
       appBar: AppBar(
-        title: const Text("Lupa Password"),
+        title: Text(
+          "Lupa Password",
+          style: TextStyle(
+            // Warna Teks menyesuaikan background
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
         centerTitle: true,
+        backgroundColor: Colors.transparent, // Transparan biar nyatu
+        elevation: 0, // Hilangkan bayangan garis
+        iconTheme: IconThemeData(
+          color: isDark ? Colors.white : Colors.black87,
+        ),
       ),
+
       body: Padding(
-        padding: const EdgeInsets.all(30),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center, // Konten di tengah vertikal
           children: [
             Text(
               "Masukkan email Anda yang terdaftar.\nKami akan mengirimkan kode pemulihan.",
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: isDark ? Colors.white70 : Colors.black54,
+              style: TextStyle(
+                // Warna teks instruksi menyesuaikan
+                color: isDark ? Colors.grey[400] : Colors.grey[700],
+                fontSize: 15,
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 35),
 
             CustomTextField(
               controller: _emailController,
               labelText: "Email",
               prefixIcon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
+              // Pastikan CustomTextField backgroundnya putih/netral di light mode
             ),
 
             const SizedBox(height: 30),
 
             _isLoading
-                ? const CircularProgressIndicator()
+                ? const CircularProgressIndicator(color: Color(0xFF00796B))
                 : SizedBox(
                     width: double.infinity,
+                    height: 50,
                     child: ElevatedButton(
                       onPressed: _sendCode,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00796B), // Hijau Brand
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       child: const Text(
                         "Kirim Kode",
-                        style: TextStyle(fontSize: 16),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),

@@ -53,59 +53,104 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Atur Ulang Password", style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(30.0),
-        child: Column(
-          children: [
-            const Text("Masukkan kode dari email dan password baru Anda.", textAlign: TextAlign.center),
-            const SizedBox(height: 30),
-            
-            // Input OTP
-            CustomTextField(
-              controller: _otpController,
-              labelText: "Kode 6 Digit",
-              prefixIcon: Icons.lock_clock,
-            ),
-            const SizedBox(height: 20),
+    Widget build(BuildContext context) {
+      // 1. Cek Tema HP (Gelap / Terang)
+      final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-            // Input Password Baru
-            CustomTextField(
-              controller: _newPasswordController,
-              labelText: "Password Baru",
-              prefixIcon: Icons.lock,
-              obscureText: _isObscure,
-              suffixIcon: IconButton(
-                icon: Icon(_isObscure ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _isObscure = !_isObscure),
-              ),
-            ),
-            const SizedBox(height: 30),
+      return Scaffold(
+        // [FIX COLOR] 
+        // Kalau Dark Mode -> Hitam (0xFF121212)
+        // Kalau Light Mode -> Biru Muda Teal (0xFFE0F2F1) kayak halaman Lupa Password
+        backgroundColor: isDarkMode ? const Color(0xFF121212) : const Color(0xFFE0F2F1),
 
-            _isLoading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _resetPassword,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00796B),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
-                      child: const Text("Simpan Password Baru", style: TextStyle(fontSize: 16)),
-                    ),
-                  ),
-          ],
+        appBar: AppBar(
+          title: Text(
+            "Atur Ulang Password",
+            style: TextStyle(
+              // Teks Putih di Dark Mode, Hitam di Light Mode
+              color: isDarkMode ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          centerTitle: true,
+          backgroundColor: Colors.transparent, // Transparan biar background Scaffold kelihatan
+          elevation: 0,
+          // Ikon Back Putih di Dark Mode, Hitam di Light Mode
+          iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
         ),
-      ),
-    );
+
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+          child: Column(
+            children: [
+              Text(
+                "Masukkan kode dari email dan password baru Anda.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  // Warna teks instruksi menyesuaikan background
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 35),
+
+              // Input OTP
+              CustomTextField(
+                controller: _otpController,
+                labelText: "Kode 6 Digit",
+                prefixIcon: Icons.vpn_key_outlined,
+                keyboardType: TextInputType.number,
+                // Pastikan CustomTextField-mu backgroundnya 'putih' atau 'transparan' 
+                // biar bagus di atas warna biru muda ini.
+              ),
+              const SizedBox(height: 20),
+
+              // Input Password Baru
+              CustomTextField(
+                controller: _newPasswordController,
+                labelText: "Password Baru",
+                prefixIcon: Icons.lock_outline,
+                obscureText: _isObscure,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _isObscure ? Icons.visibility_off : Icons.visibility,
+                    color: isDarkMode ? Colors.grey[400] : Colors.grey,
+                  ),
+                  onPressed: () => setState(() => _isObscure = !_isObscure),
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Tombol Hijau
+              _isLoading
+                  ? const CircularProgressIndicator(color: Color(0xFF00796B))
+                  : SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _resetPassword,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00796B),
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          "Simpan Password Baru",
+                          style: TextStyle(
+                            fontSize: 16, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+        ),
+      );
+    }
   }
-}
