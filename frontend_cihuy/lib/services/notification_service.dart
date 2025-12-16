@@ -1,8 +1,14 @@
 import 'dart:io';
+import 'dart:convert'; // [TAMBAHAN] Buat encode JSON
+import 'package:http/http.dart' as http; // [TAMBAHAN] Buat request ke Railway
+import 'package:firebase_messaging/firebase_messaging.dart'; // [TAMBAHAN] Ambil Token
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
+  // ==========================================================
+  // CONFIG LOCAL NOTIFICATION (Tampilan di HP)
+  // ==========================================================
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
@@ -11,6 +17,12 @@ class NotificationService {
   static const String _channelDesc = 'Notifikasi dari Server Cihuy';
 
   static bool _initialized = false;
+
+  // ==========================================================
+  // CONFIG BACKEND (Koneksi ke Railway)
+  // ==========================================================
+  // Pastikan URL ini sesuai dengan URL Railway kamu
+  static const String _baseUrl = "https://cihuy-controlitholdyourself-production.up.railway.app"; 
 
   // ---------------------------------------------
   // 1. INIT: Wajib ada biar notif bisa muncul di layar
@@ -107,6 +119,43 @@ class NotificationService {
       ),
       payload: payload,
     );
+  }
+
+  // ---------------------------------------------
+  // 4. [BARU] UPLOAD TOKEN: Kirim Token HP ke Railway
+  // Panggil fungsi ini setelah Login/Register Sukses!
+  // ---------------------------------------------
+  static Future<void> uploadToken(String zona) async {
+    try {
+      // A. Ambil Token dari Firebase (Langsung dari HP)
+      String? token = await FirebaseMessaging.instance.getToken();
+
+      if (token == null) {
+        print("❌ Gagal dapat token FCM (Mungkin emulator error)");
+        return;
+      }
+
+      print("🔥 Token HP Ini: $token"); // Cek Debug Console
+
+      // B. Kirim ke Backend Python
+      final url = Uri.parse('$_baseUrl/register');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "token": token,
+          "zona": zona, // Contoh: "WIB", "WITA", "WIT"
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ SUKSES: Token berhasil disimpan di Server Railway!");
+      } else {
+        print("⚠️ GAGAL Server: ${response.body}");
+      }
+    } catch (e) {
+      print("❌ Error Upload Token: $e");
+    }
   }
 
   // Fungsi Cancel/Clear (Disimpan saja sebagai utility)
