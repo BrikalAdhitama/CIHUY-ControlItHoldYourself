@@ -12,12 +12,13 @@ from dotenv import load_dotenv
 # ================= LOAD ENV =================
 load_dotenv()
 
-# ================= IMPORT MODUL SENDIRI =================
-# Pastikan file fcm.py ada di folder yang sama
+# ================= IMPORT MODUL FUNGSI NOTIFIKASI =================
+# Pastikan file fcm.py ada di folder yang sama dengan app.py
 try:
     from fcm import send_fcm, send_fcm_broadcast
 except ImportError:
-    # Fallback biar app gak crash kalau fcm.py error
+    # Fallback biar app gak crash kalau fcm.py belum ada/error
+    print("[WARNING] fcm.py tidak ditemukan. Fitur notif mungkin tidak jalan.")
     def send_fcm_broadcast(*args, **kwargs): pass
     def send_fcm(*args, **kwargs): pass
 
@@ -28,14 +29,14 @@ from supabase import create_client, Client
 import google.generativeai as genai
 
 # ================= KONSTANTA =================
-MIN_RESPONSE_DELAY = 2
+MIN_RESPONSE_DELAY = 2  # Biar kesannya mikir dulu (manusiawi)
 MAX_RESPONSE_TIME = 30
 
 # ================= APP INIT =================
 app = Flask(__name__)
 CORS(app)
 
-# ================= SUPABASE =================
+# ================= KONEKSI DATABASE (SUPABASE) =================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -44,11 +45,13 @@ try:
     if SUPABASE_URL and SUPABASE_KEY:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         print("[DB] Supabase Connected ⚡")
+    else:
+        print("[DB WARNING] URL atau KEY Supabase belum diset di .env")
 except Exception as e:
-    print("[DB ERROR]", e)
+    print(f"[DB ERROR] Gagal connect Supabase: {e}")
     supabase = None
 
-# ================= SYSTEM INSTRUCTION =================
+# ================= KONFIGURASI AI (GEMINI) =================
 SYSTEM_INSTRUCTION = (
     "Kamu adalah CiHuy, teman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
     "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat. "
@@ -57,14 +60,13 @@ SYSTEM_INSTRUCTION = (
     "Jangan menghakimi. Jangan memberikan diagnosis medis berat."
 )
 
-# ================= GEMINI CONFIG =================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 model = None
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     try:
-        # [REKOMENDASI TERBAIK] Pakai Flash biar cepet & support token banyak
+        # Menggunakan model Flash agar respons cepat dan token output panjang
         model = genai.GenerativeModel(
             model_name="gemini-1.5-flash", 
             system_instruction=SYSTEM_INSTRUCTION
@@ -72,9 +74,12 @@ if GEMINI_API_KEY:
         print("[AI] Gemini-1.5-Flash Ready 🧠")
     except Exception as e:
         print(f"[AI SETUP ERROR] {e}")
+else:
+    print("[AI WARNING] GEMINI_API_KEY belum diset.")
 
-# ================= HELPERS =================
+# ================= HELPERS (Fungsi Bantuan) =================
 def make_fallback_reply():
+    """Jawaban cadangan kalau AI error/timeout"""
     return random.choice([
         "Waduh, koneksi gue agak gangguan nih. Coba tanya lagi ya.",
         "Bentar, sinyal otak gue putus nyambung. Coba ulangi pertanyaannya.",
@@ -82,6 +87,7 @@ def make_fallback_reply():
     ])
 
 def extract_gemini_text(response):
+    """Mengambil teks bersih dari respon Gemini"""
     try:
         if hasattr(response, "text") and response.text:
             return response.text.strip()
@@ -96,85 +102,134 @@ def extract_gemini_text(response):
 
 # ================= DB HELPERS =================
 def get_users_by_zona(zona: str):
+    """Mengambil semua token user berdasarkan zona waktu (WIB/WITA/WIT)"""
     if not supabase:
         return []
     try:
+        # Select token where zona = zona
         res = supabase.table("users").select("token").eq("zona", zona).execute()
+        # Pakai set() biar token unik (tidak double kirim ke orang yang sama)
         return list({row["token"] for row in res.data})
     except Exception as e:
         print(f"[DB ERROR get_users] {e}")
         return []
 
-# ================= SCHEDULER JOB =================
+# ================= SCHEDULER JOB (Tugas Otomatis) =================
 def job_kirim_per_zona(sesi: str, zona: str):
+    """Fungsi yang dipanggil Scheduler untuk kirim notifikasi massal"""
+    print(f"[JOB START] Mengirim pesan {sesi} untuk zona {zona}...")
     tokens = get_users_by_zona(zona)
+    
     if not tokens:
+        print(f"[JOB INFO] Tidak ada user di zona {zona}.")
         return
-    pesan = {
-        "pagi": "Pagi! Tarik napas dulu. Hari baru, kesempatan baru 🌱",
-        "siang": "Masih bertahan? Itu keren banget 💪",
-        "malam": "Hari ini berat? Terima kasih udah bertahan 🤍"
-    }
-    send_fcm_broadcast(tokens, "CIHUY", pesan.get(sesi, "Semangat ya"))
 
-# ================= SCHEDULER =================
+    # Kata-kata semangat random biar ga bosen
+    pesan_dict = {
+        "pagi": [
+            "Pagi! Tarik napas dulu. Hari baru, kesempatan baru 🌱",
+            "Selamat pagi! Ingat targetmu hari ini ya, kamu pasti bisa! ☀️",
+            "Awali hari tanpa asap, rasakan segarnya paru-parumu! 🍃"
+        ],
+        "siang": [
+            "Masih bertahan? Itu keren banget 💪",
+            "Siang! Kalau craving datang, coba minum air putih dingin 💧",
+            "Tetap semangat! Setengah hari sudah terlewati dengan hebat 🔥"
+        ],
+        "malam": [
+            "Hari ini berat? Terima kasih udah bertahan 🤍",
+            "Selamat istirahat. Bangga banget kamu bisa lewati hari ini 🌙",
+            "Tutup hari ini dengan senyuman. Besok kita berjuang lagi! 🛌"
+        ]
+    }
+    
+    # Pilih satu pesan random
+    pesan_isi = random.choice(pesan_dict.get(sesi, ["Tetap semangat!"]))
+    
+    # Panggil fungsi dari fcm.py
+    send_fcm_broadcast(tokens, "CiHuy Sapa Kamu 👋", pesan_isi)
+    print(f"[JOB DONE] Terkirim ke {len(tokens)} device.")
+
+# ================= CONFIG SCHEDULER =================
+# Mengatur jadwal kirim sesuai jam Jakarta
 jakarta_tz = pytz.timezone("Asia/Jakarta")
 scheduler = BackgroundScheduler(timezone=jakarta_tz)
-scheduler.add_job(job_kirim_per_zona, "cron", hour=8, args=["pagi", "WIB"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=7, args=["pagi", "WITA"])
-scheduler.add_job(job_kirim_per_zona, "cron", hour=6, args=["pagi", "WIT"])
+
+# --- PAGI (Jam 08:00 waktu setempat) ---
+scheduler.add_job(job_kirim_per_zona, "cron", hour=8, args=["pagi", "WIB"])   # 08.00 WIB
+scheduler.add_job(job_kirim_per_zona, "cron", hour=7, args=["pagi", "WITA"])  # 08.00 WITA (07.00 WIB)
+scheduler.add_job(job_kirim_per_zona, "cron", hour=6, args=["pagi", "WIT"])   # 08.00 WIT  (06.00 WIB)
+
+# --- SIANG (Jam 12:00 waktu setempat) ---
 scheduler.add_job(job_kirim_per_zona, "cron", hour=12, args=["siang", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=11, args=["siang", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=10, args=["siang", "WIT"])
+
+# --- MALAM (Jam 19:00 waktu setempat) ---
 scheduler.add_job(job_kirim_per_zona, "cron", hour=19, args=["malam", "WIB"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=18, args=["malam", "WITA"])
 scheduler.add_job(job_kirim_per_zona, "cron", hour=17, args=["malam", "WIT"])
+
+# Jalankan Scheduler
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
-# ================= ROUTES =================
+# ================= ROUTES (API ENDPOINTS) =================
 
-# [BAGIAN INI YANG HILANG DI KODEMU TADI]
-# Tanpa route ini, token user gak bakal masuk database!
+# 1. HOME ROUTE (Pintu Depan) - Biar gak Not Found di browser
+@app.route("/", methods=["GET"])
+def home():
+    return """
+    <div style="text-align: center; padding-top: 50px; font-family: sans-serif;">
+        <h1>🚀 Server CiHuy is Running!</h1>
+        <p>Backend API siap melayani Aplikasi Flutter.</p>
+        <p>Status: <strong>Active</strong></p>
+    </div>
+    """
+
+# 2. REGISTER USER (Pintu Samping) - Buat nyatet Token HP & Zona Waktu
 @app.route("/register", methods=["POST"])
 def register_user():
     data = request.get_json() or {}
     token = data.get("token")
-    zona = data.get("zona", "WIB")
+    zona = data.get("zona", "WIB") # Default WIB kalau null
 
     if not token:
         return jsonify({"success": False, "message": "Token wajib ada"}), 400
 
     try:
-        # Logic: Cek dulu, kalau ada update, kalau gak ada insert
         if supabase:
+            # Cek apakah token ini sudah pernah daftar?
             existing = supabase.table("users").select("token").eq("token", token).execute()
             
             if existing.data:
-                # Update zonanya aja
+                # Kalau sudah ada, UPDATE zonanya (siapa tau pindah kota)
                 supabase.table("users").update({"zona": zona}).eq("token", token).execute()
-                print(f"[REGISTER] User Updated: {token[:10]}...")
+                print(f"[REGISTER] User Updated: {token[:15]}... ({zona})")
             else:
-                # Insert user baru
+                # Kalau belum ada, INSERT baru
                 supabase.table("users").insert({"token": token, "zona": zona}).execute()
-                print(f"[REGISTER] New User Saved: {token[:10]}...")
+                print(f"[REGISTER] New User Saved: {token[:15]}... ({zona})")
              
-        return jsonify({"success": True, "message": "Berhasil disimpan"})
+        return jsonify({"success": True, "message": "Data berhasil disimpan"})
 
     except Exception as e:
         print(f"[DB REGISTER ERROR] {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+# 3. CHAT ROUTE (Pintu Belakang) - Otak AI Gemini
 @app.route("/chat", methods=["POST"])
 def chat():
     start = time.time()
     data = request.get_json() or {}
     message = (data.get("message") or "").strip()
 
+    # Validasi input kosong
     if not message:
-        return jsonify({"success": False, "reply": "Pesan kosong"}), 400
+        return jsonify({"success": False, "reply": "Pesan kosong, ngomong apa nih?"}), 400
 
+    # Prompt Engineering
     prompt = f"""
 Situasi: User ingin berhenti merokok.
 Pesan user: {message}
@@ -189,7 +244,7 @@ JANGAN MEMOTONG KALIMAT.
     
     if model:
         try:
-            # SAFETY SETTINGS WAJIB ADA (Biar topik rokok ga diblokir)
+            # SAFETY SETTINGS: BLOCK_NONE (Wajib biar topik rokok/kesehatan mental gak diblokir)
             safe_list = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -197,33 +252,39 @@ JANGAN MEMOTONG KALIMAT.
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
             ]
 
+            # Generate jawaban
             response = model.generate_content(
                 prompt,
                 generation_config={
-                    "temperature": 0.85,
-                    "max_output_tokens": 4000, 
+                    "temperature": 0.85,    # Kreatifitas sedang
+                    "max_output_tokens": 4000, # Cukup panjang buat tips
                 },
                 safety_settings=safe_list
             )
 
             reply = extract_gemini_text(response)
             
+            # Debugging kalau AI nolak jawab
             if not reply:
-                print(f"[DEBUG AI] Response Feedback: {response.prompt_feedback}")
+                print(f"[DEBUG AI] Empty Response. Feedback: {response.prompt_feedback}")
         
         except Exception as e:
             print(f"[AI ERROR FATAL] {e}")
             reply = None
 
+    # Fallback kalau AI mati/error
     if not reply:
         reply = make_fallback_reply()
 
+    # Simulasi delay manusia (biar gak terlalu robot)
     elapsed = time.time() - start
     if elapsed < MIN_RESPONSE_DELAY:
         time.sleep(MIN_RESPONSE_DELAY - elapsed)
 
     return jsonify({"success": True, "reply": reply})
 
-# ================= MAIN =================
+# ================= RUN APP =================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    # Mengambil PORT dari environment (Wajib buat Railway)
+    port = int(os.getenv("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
