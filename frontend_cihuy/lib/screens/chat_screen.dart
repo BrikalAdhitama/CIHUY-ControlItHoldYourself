@@ -109,7 +109,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     } catch (_) {
       if (mounted) {
         _addMessage(
-          'CiHuy lagi susah dihubungi. Coba sebentar lagi ya.',
+          'Cia lagi susah dihubungi. Coba sebentar lagi ya.',
           false,
           saveToDb: false 
         );
@@ -191,7 +191,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'CiHuy sedang mengetik...',
+                      'Cia sedang mengetik...',
                       style: TextStyle(
                         fontStyle: FontStyle.italic,
                         color: isDark ? Colors.grey[400] : Colors.grey,
@@ -250,7 +250,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  // --- WIDGET TAMPILAN KOSONG (CLEAN VERSION) ---
+  // --- WIDGET TAMPILAN KOSONG ---
   Widget _buildEmptyState(bool isDark) {
     return Center(
       child: SingleChildScrollView(
@@ -298,7 +298,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  // --- WIDGET BUBBLE CHAT DENGAN AVATAR ---
+  // --- WIDGET BUBBLE CHAT (MODIFIED FOR JUSTIFIED TEXT) ---
   Widget _buildBubble(
     BuildContext context,
     String text,
@@ -316,7 +316,8 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.70,
+        // Sedikit dilebarkan (0.75) agar Justified text terlihat lebih bagus (tidak banyak rongga)
+        maxWidth: MediaQuery.of(context).size.width * 0.75,
       ),
       decoration: BoxDecoration(
         color: isUser ? userBubbleColor : botBubbleColor,
@@ -343,13 +344,28 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
           isUser
               ? Text(
                   text,
-                  style: TextStyle(color: textColor, fontSize: 15),
+                  textAlign: TextAlign.justify, // <--- RATA KANAN KIRI (USER)
+                  style: TextStyle(
+                    color: textColor, 
+                    fontSize: 15,
+                    height: 1.2, // Jarak antar baris biar gak terlalu padat saat di-justify
+                  ),
                 )
-              : MarkdownBody(
-                  data: text,
-                  styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(fontSize: 15, color: textColor),
-                    strong: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+              : 
+              // Bungkus MarkdownBody dengan DefaultTextStyle agar textAlign: justify jalan
+              DefaultTextStyle(
+                  style: TextStyle(
+                    fontSize: 15, 
+                    color: textColor,
+                    height: 1.3, // Jarak antar baris lebih lega untuk AI
+                  ),
+                  textAlign: TextAlign.justify, // <--- RATA KANAN KIRI (AI)
+                  child: MarkdownBody(
+                    data: text,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(color: textColor),
+                      strong: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+                    ),
                   ),
                 ),
           const SizedBox(height: 4),
