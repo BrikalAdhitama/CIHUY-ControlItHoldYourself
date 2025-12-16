@@ -138,6 +138,45 @@ class _EducationScreenState extends State<EducationScreen> {
     setState(() {});
   }
 
+  // ================= HELPER WIDGET: NOT FOUND =================
+  // [NEW] Widget tampilan saat data kosong/tidak ketemu
+  Widget _buildNotFoundState(bool isDark) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(), // Agar tetap bisa di-refresh
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.6, // Biar posisi di tengah
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 80,
+              color: isDark ? Colors.white24 : Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Yah, artikel tidak ditemukan...',
+              style: TextStyle(
+                fontSize: 16,
+                color: isDark ? Colors.white54 : Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Coba cari kata kunci lain ya!',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white38 : Colors.grey.shade400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
@@ -151,20 +190,20 @@ class _EducationScreenState extends State<EducationScreen> {
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor: bgColor, // Background disamakan
+      backgroundColor: bgColor,
       appBar: AppBar(
         title: Text(
           'Edukasi Rokok & Vape',
           style: TextStyle(
-            color: textColor, // Warna teks hitam/putih sesuai tema
+            color: textColor,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
-        backgroundColor: bgColor, // Background AppBar sama dengan Scaffold
-        elevation: 0, // Hilangkan bayangan
-        scrolledUnderElevation: 0, // Hilangkan bayangan saat scroll
-        iconTheme: IconThemeData(color: textColor), // Warna icon back/menu
+        backgroundColor: bgColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: textColor),
         actions: [
           IconButton(
             icon: Icon(
@@ -199,7 +238,7 @@ class _EducationScreenState extends State<EducationScreen> {
                 fillColor: cardColor,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30), // Lebih bulat
+                  borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
                 enabledBorder: OutlineInputBorder(
@@ -230,115 +269,117 @@ class _EducationScreenState extends State<EducationScreen> {
                       itemCount: 5,
                       itemBuilder: (_, __) => const _EduSkeleton(),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                      itemCount: _filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, i) {
-                        final item = _filtered[i];
-                        final id = item['id'].toString();
-                        final type = item['type'];
+                  // [UPDATE] Logika untuk menampilkan Not Found jika kosong
+                  : _filtered.isEmpty 
+                      ? _buildNotFoundState(isDark) // Tampilkan widget Not Found
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                          itemCount: _filtered.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, i) {
+                            final item = _filtered[i];
+                            final id = item['id'].toString();
+                            final type = item['type'];
 
-                        final badgeColor = type == 'video'
-                            ? Colors.blue
-                            : type == 'pdf'
-                                ? Colors.red
-                                : primary;
+                            final badgeColor = type == 'video'
+                                ? Colors.blue
+                                : type == 'pdf'
+                                    ? Colors.red
+                                    : primary;
 
-                        return Card(
-                          elevation: 0, // Flat card biar modern
-                          color: cardColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            // Sedikit border halus biar rapi
-                            side: BorderSide(
-                              color: Colors.grey.withOpacity(0.1), 
-                              width: 1
-                            ),
-                          ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      EducationDetailScreen(item: item),
+                            return Card(
+                              elevation: 0,
+                              color: cardColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
+                                  color: Colors.grey.withOpacity(0.1), 
+                                  width: 1
                                 ),
-                              );
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // ICON KIRI
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: badgeColor.withOpacity(0.1),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      type == 'video'
-                                          ? Icons.play_arrow_rounded
-                                          : type == 'pdf'
-                                              ? Icons.picture_as_pdf_rounded
-                                              : Icons.menu_book_rounded,
-                                      color: badgeColor,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  
-                                  // TEXT TENGAH
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item['title'] ?? '',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                            color: textColor,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          (item['summary'] ?? '').toString(),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                            height: 1.3,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  
-                                  // BOOKMARK KANAN
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    icon: Icon(
-                                      _bookmarks.contains(id)
-                                          ? Icons.bookmark
-                                          : Icons.bookmark_border_rounded,
-                                      color: primary,
-                                      size: 22,
-                                    ),
-                                    onPressed: () => _toggleBookmark(id),
-                                  ),
-                                ],
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EducationDetailScreen(item: item),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // ICON KIRI
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: badgeColor.withOpacity(0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          type == 'video'
+                                              ? Icons.play_arrow_rounded
+                                              : type == 'pdf'
+                                                  ? Icons.picture_as_pdf_rounded
+                                                  : Icons.menu_book_rounded,
+                                          color: badgeColor,
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      
+                                      // TEXT TENGAH
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item['title'] ?? '',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                color: textColor,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              (item['summary'] ?? '').toString(),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      
+                                      // BOOKMARK KANAN
+                                      IconButton(
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        icon: Icon(
+                                          _bookmarks.contains(id)
+                                              ? Icons.bookmark
+                                              : Icons.bookmark_border_rounded,
+                                          color: primary,
+                                          size: 22,
+                                        ),
+                                        onPressed: () => _toggleBookmark(id),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
             ),
           ),
         ],

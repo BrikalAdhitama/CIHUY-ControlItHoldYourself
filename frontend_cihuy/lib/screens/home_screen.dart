@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Duration _elapsed = Duration.zero;
   Timer? _timer;
 
-  int _selectedIndex = 0;
+  int _selectedIndex = 0; // 0: Home, 1: Chat, 2: Edukasi
 
   String? _displayName;
   String? _email;
@@ -64,6 +64,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _startTimer();
   }
 
+  // ==========================================
+  // [UPDATE] TRANSISI NAVIGASI HALAMAN
+  // Diubah jadi MaterialPageRoute biasa (standar)
+  // ==========================================
+  Route _createRoute(Widget page) {
+    return MaterialPageRoute(builder: (context) => page);
+  }
+
   // Parse server timestamp safely when server returns String
   DateTime? _parseServerTimestampAsUtcThenLocal(String? s) {
     if (s == null) return null;
@@ -75,7 +83,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (hasTz) {
         return DateTime.parse(trimmed).toLocal();
       } else {
-        // assume UTC if no timezone info
         return DateTime.parse(trimmed + 'Z').toLocal();
       }
     } catch (_) {
@@ -104,20 +111,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _removeLocalQuitDate() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kLocalQuitDateKey);
-    } catch (_) {}
-  }
-
   // ---------------------
-  // Load quit date (server first, fallback local)
+  // Load quit date
   // ---------------------
   Future<void> _loadQuitDate() async {
     try {
-      final serverVal =
-          await AuthService.getQuitDate(); // may return DateTime? or String? depending impl
+      final serverVal = await AuthService.getQuitDate();
       DateTime? serverLocal;
 
       if (serverVal is DateTime) {
@@ -129,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       final localParsed = await _loadLocalQuitDate();
-
       DateTime? finalQuitLocal;
 
       if (serverLocal != null) {
@@ -164,9 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ---------------------
   void _startTimer() {
     _timer?.cancel();
-
     if (_quitDate == null) return;
-
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _quitDate == null) return;
       final nowLocal = DateTime.now();
@@ -177,20 +173,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _resetLocalTimerToNow() async {
-    final now = DateTime.now();
-    await _saveQuitDateLocally(now);
-    setState(() {
-      _quitDate = now;
-      _elapsed = Duration.zero;
-    });
-    _startTimer();
-  }
-
-  // ==========================
-  // ESTIMATED CIGARETTES AVOIDED
-  // ==========================
-  // 1 batang per 1 jam
   int get _estimatedCigsAvoided {
     return _elapsed.inHours;
   }
@@ -228,11 +210,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-
   Future<void> _loadProfile() async {
     try {
       final data = await AuthService.getCurrentProfile();
-
       String? displayName = widget.username;
       String? email;
       String? avatarUrl;
@@ -240,8 +220,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (data != null) {
         final username = data['username'] as String?;
         final dName = data['display_name'] as String?;
-
-        // prioritas: display_name -> username -> yang dikirim dari login
         displayName = dName ?? username ?? widget.username;
         email = data['email'] as String?;
         avatarUrl = data['avatar_url'] as String?;
@@ -262,38 +240,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // ---------------------
-  // NAV BAWAH
-  // ---------------------
   void _onItemTapped(int index) {
-    switch (index) {
-      case 0:
-        setState(() => _selectedIndex = 0);
-        break;
-      case 1:
-        setState(() => _selectedIndex = 1);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ChatScreen()),
-        ).then((_) {
-          if (mounted) setState(() => _selectedIndex = 0);
-        });
-        break;
-      case 2:
-        setState(() => _selectedIndex = 2);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const EducationScreen()),
-        ).then((_) {
-          if (mounted) setState(() => _selectedIndex = 0);
-        });
-        break;
-    }
+    if (_selectedIndex == index) return;
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
-  // ---------------------
-  // Helpers date
-  // ---------------------
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -306,9 +259,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _normalizeDateKey(String isoDate) {
     try {
       if (isoDate.isEmpty) return '';
-      // isoDate bisa datang sebagai "2025-11-26" atau "2025-11-26T12:34:56Z"
       final dateOnly = isoDate.split('T')[0];
-      // basic validation: must match yyyy-mm-dd
       final parts = dateOnly.split('-');
       if (parts.length == 3) {
         final y = parts[0].padLeft(4, '0');
@@ -323,7 +274,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // ---------------------
-  // Relapse dialogs
+  // Relapse logic
   // ---------------------
   void _showRelapseTypeDialog() {
     showDialog(
@@ -369,109 +320,87 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _showRelapseAmountDialog(
-        {required bool isRokok, required bool isVape}) {
-      _rokokController.clear();
-      _vapeController.clear();
+      {required bool isRokok, required bool isVape}) {
+    _rokokController.clear();
+    _vapeController.clear();
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Berapa banyak?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isRokok)
-                TextField(
-                  controller: _rokokController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'Jumlah Batang Rokok',
-                      icon: Icon(Icons.smoke_free)),
-                ),
-              if (isVape)
-                TextField(
-                  controller: _vapeController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                      labelText: 'Jumlah Hisapan Vape',
-                      icon: Icon(Icons.vaping_rooms)),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Batal')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () {
-                Navigator.pop(context);
-                // [UPDATE DI SINI] Kirim status mode ke fungsi process
-                _processRelapse(reqRokok: isRokok, reqVape: isVape);
-              },
-              child: const Text('Reset Timer',
-                  style: TextStyle(color: Colors.white)),
-            ),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Berapa banyak?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isRokok)
+              TextField(
+                controller: _rokokController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'Jumlah Batang Rokok',
+                    icon: Icon(Icons.smoke_free)),
+              ),
+            if (isVape)
+              TextField(
+                controller: _vapeController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'Jumlah Hisapan Vape',
+                    icon: Icon(Icons.vaping_rooms)),
+              ),
           ],
         ),
-      );
-    }
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(context);
+              _processRelapse(reqRokok: isRokok, reqVape: isVape);
+            },
+            child: const Text('Reset Timer',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
-// [PERBAIKAN] Tambahkan parameter reqRokok dan reqVape
   Future<void> _processRelapse({required bool reqRokok, required bool reqVape}) async {
     final rokokText = _rokokController.text.trim();
     final vapeText = _vapeController.text.trim();
 
-    // Default ke 0 jika kosong/error, biar mudah divalidasi
     int rokokCount = int.tryParse(rokokText) ?? 0;
     int vapeCount = int.tryParse(vapeText) ?? 0;
 
-    // ================= VALIDASI KETAT (INI YANG BARU) =================
-
-    // 1. Validasi Mode "KEDUANYA" (Wajib Dua-duanya > 0)
     if (reqRokok && reqVape) {
       if (rokokCount <= 0 || vapeCount <= 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pilih "Keduanya" wajib isi jumlah Rokok DAN Vape (min 1).'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return; // ⛔ STOP DI SINI
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pilih "Keduanya" wajib isi jumlah Rokok dan Vape (min 1).'),
+            backgroundColor: Colors.red));
+        return;
       }
-    } 
-    // 2. Validasi Mode "ROKOK SAJA"
-    else if (reqRokok) {
+    } else if (reqRokok) {
       if (rokokCount <= 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Jumlah rokok minimal 1 batang.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return; // ⛔ STOP
+            backgroundColor: Colors.red));
+        return;
       }
-      vapeCount = 0; // Pastikan vape 0 (bersih-bersih data)
-    } 
-    // 3. Validasi Mode "VAPE SAJA"
-    else if (reqVape) {
+      vapeCount = 0;
+    } else if (reqVape) {
       if (vapeCount <= 0) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Jumlah hisapan vape minimal 1.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return; // ⛔ STOP
+            backgroundColor: Colors.red));
+        return;
       }
-      rokokCount = 0; // Pastikan rokok 0 (bersih-bersih data)
+      rokokCount = 0;
     }
-
-    // ================= CALL API =================
-    // (Kode ke bawah sama persis, cuma copy paste aja biar lengkap)
 
     final dynamic res = await AuthService.resetTimer(
       widget.username,
@@ -489,28 +418,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else if (res is Map<String, dynamic>) {
       success = res['success'] == true;
       if (res['message'] is String) errMsg = res['message'] as String;
-      if (res['quit_date'] is String) {
-        serverQuitIso = res['quit_date'] as String;
-      }
-      if (res['quit_date_local'] is String) {
-        serverQuitLocalIso = res['quit_date_local'] as String;
-      }
+      if (res['quit_date'] is String) serverQuitIso = res['quit_date'];
+      if (res['quit_date_local'] is String) serverQuitLocalIso = res['quit_date_local'];
     }
 
     if (!mounted) return;
 
-    // ================= SUCCESS =================
     if (success) {
       _rokokController.clear();
       _vapeController.clear();
 
       DateTime newQuitLocal;
       if (serverQuitLocalIso != null) {
-        newQuitLocal =
-            DateTime.tryParse(serverQuitLocalIso)?.toLocal() ?? DateTime.now();
+        newQuitLocal = DateTime.tryParse(serverQuitLocalIso)?.toLocal() ?? DateTime.now();
       } else if (serverQuitIso != null) {
-        final parsed = _parseServerTimestampAsUtcThenLocal(serverQuitIso);
-        newQuitLocal = parsed ?? DateTime.now();
+        newQuitLocal = _parseServerTimestampAsUtcThenLocal(serverQuitIso) ?? DateTime.now();
       } else {
         newQuitLocal = DateTime.now();
       }
@@ -526,35 +448,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _loadHistoryAndProgress();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Data tercatat. Jujur itu awal kesembuhan!'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+            backgroundColor: Colors.orange));
       }
-    } 
-    // ================= FAILED =================
-    else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(errMsg ?? 'Gagal me-reset timer (cek koneksi)'),
-          backgroundColor: Colors.red,
-        ),
-      );
+          backgroundColor: Colors.red));
     }
   }
 
-  // ---------------------
-  // Logout
-  // ---------------------
   void _logout() async {
     _timer?.cancel();
     await AuthService.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false);
+        _createRoute(const LoginScreen()), (route) => false);
   }
 
   Future<void> _confirmLogout() async {
@@ -562,16 +472,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Yakin ingin logout?'),
-        content: const Text(
-            'Lu bakal keluar dari akun dan balik ke halaman login.'),
+        content: const Text('Lu bakal keluar dari akun dan balik ke halaman login.'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Batal')),
           TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child:
-                  const Text('Logout', style: TextStyle(color: Colors.red))),
+              child: const Text('Logout', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -583,12 +489,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _loadQuitDate().then((_) => _startTimer());
       _loadHistoryAndProgress();
-      _loadProfile(); // <-- biar avatar ke-refresh kalau berubah
+      _loadProfile();
     }
     super.didChangeAppLifecycleState(state);
   }
 
   Future<bool> _onWillPop() async {
+    if (_selectedIndex != 0) {
+      setState(() {
+        _selectedIndex = 0;
+      });
+      return false;
+    }
     await _confirmLogout();
     return false;
   }
@@ -602,8 +514,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // ===========================================
+  // CONTENT HELPERS
+  // ===========================================
+  Widget _getBodyWidget(bool isDarkMode, Color cardColor, Color textColor) {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildHomeContent(isDarkMode, cardColor, textColor);
+      case 1:
+        return const ChatScreen();
+      case 2:
+        return const EducationScreen();
+      default:
+        return _buildHomeContent(isDarkMode, cardColor, textColor);
+    }
+  }
+
+  Widget _buildHomeContent(bool isDarkMode, Color cardColor, Color textColor) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+        child: Column(
+          children: [
+            _buildTimerCard(cardColor, textColor),
+            const SizedBox(height: 20),
+            _buildProgressCard(cardColor, textColor),
+            const SizedBox(height: 20),
+            _buildMotivationCard(textColor),
+            const SizedBox(height: 20),
+            _buildHistoryCard(cardColor, textColor),
+            const SizedBox(height: 20),
+            _buildEducationCard(cardColor, textColor, isDarkMode),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------------------
-  // UI builders
+  // MAIN BUILD
   // ---------------------
   @override
   Widget build(BuildContext context) {
@@ -611,47 +561,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final textColor = isDarkMode ? Colors.white : Colors.black;
     final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
-    final scaffoldBg =
-        isDarkMode ? const Color(0xFF071012) : const Color(0xFFE0F2F1);
-    final drawerHeaderColor =
-        isDarkMode ? const Color(0xFF004D40) : const Color(0xFF00796B);
-    final panicButtonColor =
-        isDarkMode ? const Color(0xFF00796B) : Colors.black87;
+    final scaffoldBg = isDarkMode ? const Color(0xFF071012) : const Color(0xFFE0F2F1);
+    final drawerHeaderColor = isDarkMode ? const Color(0xFF004D40) : const Color(0xFF00796B);
+    final panicButtonColor = isDarkMode ? const Color(0xFF00796B) : Colors.black87;
 
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
         backgroundColor: scaffoldBg,
-        appBar: _buildAppBar(isDarkMode, scaffoldBg),
-        drawer: _buildDrawer(context, drawerHeaderColor, isDarkMode),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 20.0, vertical: 16.0),
-            child: Column(
-              children: [
-                _buildTimerCard(cardColor, textColor),
-                const SizedBox(height: 20),
-                _buildProgressCard(cardColor, textColor),
-                const SizedBox(height: 20),
-                _buildMotivationCard(textColor),
-                const SizedBox(height: 20),
-                _buildHistoryCard(cardColor, textColor),
-                const SizedBox(height: 20),
-                _buildEducationCard(cardColor, textColor, isDarkMode),
-                const SizedBox(height: 100),
-              ],
-            ),
-          ),
-        ),
-        floatingActionButton: _buildPanicButton(panicButtonColor),
-        floatingActionButtonLocation:
-            FloatingActionButtonLocation.endFloat,
+        appBar: _selectedIndex == 0 ? _buildAppBar(isDarkMode, scaffoldBg) : null,
+        drawer: _selectedIndex == 0 ? _buildDrawer(context, drawerHeaderColor, isDarkMode) : null,
+        
+        // ============================================================
+        // [UPDATE] ANIMASI DIHAPUS
+        // Sekarang langsung panggil _getBodyWidget tanpa AnimatedSwitcher
+        // ============================================================
+        body: _getBodyWidget(isDarkMode, cardColor, textColor),
+
+        // FAB
+        floatingActionButton: _selectedIndex == 0
+              ? _buildPanicButton(panicButtonColor)
+              : const SizedBox.shrink(),
+
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        
         bottomNavigationBar: SafeArea(
           top: false,
           child: _buildBottomNavigationBar(
-              isDarkMode ? const Color(0xFF121212) : Colors.white,
-              isDarkMode),
+              isDarkMode ? const Color(0xFF121212) : Colors.white, isDarkMode),
         ),
       ),
     );
@@ -663,12 +600,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      iconTheme: IconThemeData(
-          color: isDarkMode ? Colors.white70 : Colors.black87),
+      iconTheme: IconThemeData(color: isDarkMode ? Colors.white70 : Colors.black87),
       leading: Builder(
         builder: (context) => IconButton(
-          icon: Icon(Icons.menu,
-              color: isDarkMode ? Colors.white70 : Colors.black87),
+          icon: Icon(Icons.menu, color: isDarkMode ? Colors.white70 : Colors.black87),
           onPressed: () => Scaffold.of(context).openDrawer(),
         ),
       ),
@@ -679,27 +614,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             onTap: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      ProfileScreen(username: widget.username),
-                ),
+                _createRoute(ProfileScreen(username: widget.username)),
               );
-              if (mounted) {
-                _loadProfile(); // refresh avatar setelah balik dari profil
-              }
+              if (mounted) _loadProfile();
             },
             child: CircleAvatar(
               radius: 18,
               backgroundColor: isDarkMode
                   ? Colors.grey.withOpacity(0.12)
                   : Colors.grey.withOpacity(0.3),
-              backgroundImage:
-                  _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+              backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
               child: _avatarUrl == null
-                  ? Icon(
-                      Icons.person,
-                      color: isDarkMode ? Colors.white70 : Colors.white,
-                    )
+                  ? Icon(Icons.person, color: isDarkMode ? Colors.white70 : Colors.white)
                   : null,
             ),
           ),
@@ -708,8 +634,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildDrawer(
-      BuildContext context, Color headerColor, bool isDarkMode) {
+  Widget _buildDrawer(BuildContext context, Color headerColor, bool isDarkMode) {
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -725,50 +650,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: Colors.white,
-                    backgroundImage: _avatarUrl != null
-                        ? NetworkImage(_avatarUrl!)
-                        : null,
+                    backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
                     child: _avatarUrl == null
-                        ? const Icon(
-                            Icons.person,
-                            size: 40,
-                            color: Colors.grey,
-                          )
+                        ? const Icon(Icons.person, size: 40, color: Colors.grey)
                         : null,
                   ),
                   const SizedBox(height: 10),
                   Text(
                     'Halo, ${_displayName ?? widget.username}!',
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    'Semangat terus ya 🔥',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
+                  const Text('Semangat terus ya 🔥',
+                      style: TextStyle(color: Colors.white70, fontSize: 14)),
                 ],
               ),
             ),
           ),
           ListTile(
-            leading: Icon(Icons.settings,
-                color: isDarkMode ? Colors.white70 : null),
+            leading: Icon(Icons.settings, color: isDarkMode ? Colors.white70 : null),
             title: const Text('Pengaturan'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      SettingsScreen(username: widget.username),
-                ),
-              );
+              Navigator.push(context, _createRoute(SettingsScreen(username: widget.username)));
             },
           ),
           ListTile(
@@ -776,19 +680,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             title: const Text('Bantuan & Info'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => HelpScreen()),
-              );
+              Navigator.push(context, _createRoute(HelpScreen()));
             },
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.exit_to_app, color: Colors.red),
-            title: const Text(
-              'Log Out',
-              style: TextStyle(color: Colors.red),
-            ),
+            title: const Text('Log Out', style: TextStyle(color: Colors.red)),
             onTap: () async {
               Navigator.pop(context);
               await _confirmLogout();
@@ -801,25 +699,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildTimerCard(Color bgColor, Color txtColor) {
     String two(int n) => n.toString().padLeft(2, '0');
-
     final hours = two(_elapsed.inHours);
     final minutes = two(_elapsed.inMinutes.remainder(60));
     final seconds = two(_elapsed.inSeconds.remainder(60));
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 20),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.withOpacity(0.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 2,
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          )
+              color: Colors.black.withOpacity(0.05),
+              spreadRadius: 2,
+              blurRadius: 10,
+              offset: const Offset(0, 5))
         ],
       ),
       child: Column(
@@ -827,11 +722,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Text(
             'Berhenti Sejak',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              decoration: TextDecoration.underline,
-              color: txtColor,
-            ),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+                color: txtColor),
           ),
           const SizedBox(height: 20),
           Row(
@@ -850,25 +744,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _timeBox(String value, String label, Color color) {
     return Column(
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 40,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 16, color: Colors.grey),
-        )
+        Text(value, style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: const TextStyle(fontSize: 16, color: Colors.grey))
       ],
     );
   }
 
   Widget _buildProgressCard(Color bgColor, Color txtColor) {
     final streakDays = _elapsed.inHours ~/ 24;
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -879,30 +762,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Streak & Ringkasan',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: txtColor,
-            ),
-          ),
+          Text('Streak & Ringkasan',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: txtColor)),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildProgressItem(
-                Icons.calendar_today,
-                '$streakDays',
-                'Hari\nBebas',
-                txtColor,
-              ),
-              _buildProgressItem(
-                Icons.smoke_free,
-                '$_estimatedCigsAvoided',
-                'Rokok\nDihindari',
-                txtColor,
-              ),
+              _buildProgressItem(Icons.calendar_today, '$streakDays', 'Hari\nBebas', txtColor),
+              _buildProgressItem(Icons.smoke_free, '$_estimatedCigsAvoided',
+                  'Rokok\nDihindari', txtColor),
             ],
           )
         ],
@@ -910,39 +778,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildProgressItem(
-      IconData icon, String value, String label, Color color) {
+  Widget _buildProgressItem(IconData icon, String value, String label, Color color) {
     return Column(
       children: [
         Icon(icon, size: 35, color: color),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
+        Text(value,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
         const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
-        )
+        Text(label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.grey))
       ],
     );
   }
 
   Widget _buildMotivationCard(Color txtColor) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDarkMode
-        ? Colors.grey.withOpacity(0.08)
-        : const Color(0xFFE0F2F1);
-    final borderColor =
-        isDarkMode ? Colors.white12 : const Color(0xFFB2DFDB);
-    final titleColor =
-        isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF00796B);
+    final cardBg = isDarkMode ? Colors.grey.withOpacity(0.08) : const Color(0xFFE0F2F1);
+    final borderColor = isDarkMode ? Colors.white12 : const Color(0xFFB2DFDB);
+    final titleColor = isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF00796B);
 
     return InkWell(
       onTap: _loadMotivationQuote,
@@ -958,32 +813,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ? []
               : [
                   BoxShadow(
-                    color: Colors.teal.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
+                      color: Colors.teal.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
                 ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Motivasi Harian',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: titleColor,
-              ),
-            ),
+            Text('Motivasi Harian',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold, color: titleColor)),
             const SizedBox(height: 10),
-            Text(
-              _motivationText,
-              style: TextStyle(
-                fontSize: 15,
-                fontStyle: FontStyle.italic,
-                color: txtColor,
-              ),
-            ),
+            Text(_motivationText,
+                style: TextStyle(
+                    fontSize: 15, fontStyle: FontStyle.italic, color: txtColor)),
           ],
         ),
       ),
@@ -993,32 +837,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildHistoryCard(Color bgColor, Color txtColor) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
     const monthNames = [
-      "Januari",
-      "Februari",
-      "Maret",
-      "April",
-      "Mei",
-      "Juni",
-      "Juli",
-      "Agustus",
-      "September",
-      "Oktober",
-      "November",
-      "Desember"
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
     ];
+    final currentMonthYear = "${monthNames[today.month - 1]} ${today.year}";
+    final daysToShow = List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
 
-    final currentMonthYear =
-        "${monthNames[today.month - 1]} ${today.year}";
-
-    // ===== 7 HARI TERAKHIR (today - 6 s/d today)
-    final daysToShow = List.generate(
-      7,
-      (i) => today.subtract(Duration(days: 6 - i)),
-    );
-
-    // ===== MAP HISTORY (yyyy-MM-dd -> data)
     final Map<String, Map<String, dynamic>> historyMap = {
       for (final h in _history7Days)
         _normalizeDateKey((h['date'] ?? '') as String): h,
@@ -1033,92 +858,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: Column(
         children: [
-          // ===== HEADER
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Riwayat 7 Hari',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.underline,
-                  color: txtColor,
-                ),
-              ),
+              Text('Riwayat 7 Hari',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                      color: txtColor)),
               Row(
                 children: [
-                  Text(
-                    currentMonthYear,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: txtColor,
-                    ),
-                  ),
+                  Text(currentMonthYear,
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.bold, color: txtColor)),
                   const SizedBox(width: 8),
                   TextButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HistoryScreen(),
-                        ),
-                      );
+                      Navigator.push(context, _createRoute(const HistoryScreen()));
                     },
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF00796B),
-                    ),
-                    child: const Text(
-                      'Lihat Semua >',
-                      style: TextStyle(fontSize: 12),
-                    ),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFF00796B)),
+                    child: const Text('Lihat Semua >', style: TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
             ],
           ),
-
           const SizedBox(height: 15),
-
-          // ===== BULATAN 7 HARI
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: daysToShow.map((date) {
               final key = _dateKeyFromDate(date);
               final data = historyMap[key];
-
-              // ===== STATUS PURE DARI DATA
-              String status;
-              if (data == null) {
-                status = 'neutral';
-              } else {
-                status = (data['status'] as String?) ?? 'neutral';
-              }
-
+              String status = (data != null) ? (data['status'] as String? ?? 'neutral') : 'neutral';
               Color circleColor;
               switch (status) {
-                case 'success':
-                  circleColor = const Color(0xFF00796B); // hijau CIHUY
-                  break;
-                case 'relapse':
-                  circleColor = Colors.redAccent;
-                  break;
-                default:
-                  circleColor = Colors.grey.withOpacity(0.25);
+                case 'success': circleColor = const Color(0xFF00796B); break;
+                case 'relapse': circleColor = Colors.redAccent; break;
+                default: circleColor = Colors.grey.withOpacity(0.25);
               }
-
               final isToday = _isSameDay(date, today);
 
               return GestureDetector(
                 onTap: () {
-                  if (data != null &&
-                      (data['detail'] as String?)?.isNotEmpty == true) {
+                  if (data != null && (data['detail'] as String?)?.isNotEmpty == true) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(data['detail']),
-                        duration: const Duration(seconds: 2),
-                      ),
+                      SnackBar(content: Text(data['detail']), duration: const Duration(seconds: 2)),
                     );
                   }
                 },
@@ -1130,21 +915,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     color: circleColor,
                     shape: BoxShape.circle,
                     border: isToday
-                        ? Border.all(
-                            color: Colors.black.withOpacity(0.35),
-                            width: 1.5,
-                          )
+                        ? Border.all(color: Colors.black.withOpacity(0.35), width: 1.5)
                         : null,
                   ),
-                  child: Text(
-                    '${date.day}',
-                    style: TextStyle(
-                      color: (status == 'success' || status == 'relapse')
-                          ? Colors.white
-                          : txtColor.withOpacity(0.6),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: Text('${date.day}',
+                      style: TextStyle(
+                          color: (status == 'success' || status == 'relapse')
+                              ? Colors.white
+                              : txtColor.withOpacity(0.6),
+                          fontWeight: FontWeight.bold)),
                 ),
               );
             }).toList(),
@@ -1159,186 +938,121 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.only(bottom: 70.0),
       child: FloatingActionButton.extended(
         onPressed: _showRelapseTypeDialog,
-        label: const Text(
-          'Saya Merokok/Vape Lagi',
-          style: TextStyle(color: Colors.white),
-        ),
-        icon: const Icon(
-          Icons.warning_amber_rounded,
-          color: Colors.white,
-        ),
+        label: const Text('Saya Merokok/Vape Lagi', style: TextStyle(color: Colors.white)),
+        icon: const Icon(Icons.warning_amber_rounded, color: Colors.white),
         backgroundColor: backgroundColor,
       ),
     );
   }
 
-  Widget _buildBottomNavigationBar(
-      Color bgColor, bool isDarkMode) {
+  Widget _buildBottomNavigationBar(Color bgColor, bool isDarkMode) {
     return BottomNavigationBar(
       backgroundColor: bgColor,
       currentIndex: _selectedIndex,
       selectedItemColor: const Color(0xFF00796B),
-      unselectedItemColor:
-          isDarkMode ? Colors.white54 : Colors.grey,
+      unselectedItemColor: isDarkMode ? Colors.white54 : Colors.grey,
       showSelectedLabels: true,
       showUnselectedLabels: true,
       onTap: _onItemTapped,
       items: [
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.home_filled, size: 28),
-          label: 'Home',
-        ),
+        const BottomNavigationBarItem(icon: Icon(Icons.home_filled, size: 28), label: 'Home'),
         BottomNavigationBarItem(
-          icon: SvgPicture.asset(
-            'assets/chatbot.svg',
-            width: 28,
-            colorFilter: ColorFilter.mode(
-              _selectedIndex == 1
-                  ? const Color(0xFF00796B)
-                  : (isDarkMode
-                      ? Colors.white54
-                      : Colors.grey),
-              BlendMode.srcIn,
-            ),
-          ),
+          icon: SvgPicture.asset('assets/chatbot.svg',
+              width: 28,
+              colorFilter: ColorFilter.mode(
+                  _selectedIndex == 1
+                      ? const Color(0xFF00796B)
+                      : (isDarkMode ? Colors.white54 : Colors.grey),
+                  BlendMode.srcIn)),
           label: 'Chat AI',
         ),
         const BottomNavigationBarItem(
-          icon: Icon(Icons.menu_book_rounded, size: 26),
-          label: 'Edukasi',
-        ),
+            icon: Icon(Icons.menu_book_rounded, size: 26), label: 'Edukasi'),
       ],
     );
   }
 
-  BoxDecoration _card(Color bg) {
-    return BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: Colors.grey.withOpacity(0.12)),
+  Widget _buildEducationCard(Color bgColor, Color txtColor, bool isDarkMode) {
+    const heroAssetPath = 'assets/edu_hero.svg';
+    final gradient = LinearGradient(
+      colors: isDarkMode
+          ? const [Color(0xFF1B3C36), Color(0xFF0F2A26)]
+          : const [Color(0xFFB2DFDB), Color(0xFFE0F2F1)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
     );
-  }
+    final titleColor = isDarkMode ? Colors.white : const Color(0xFF004D40);
+    final subtitleColor = isDarkMode ? Colors.white70 : const Color(0xFF004D40).withOpacity(0.8);
 
-  Widget _buildEducationCard(
-        Color bgColor, Color txtColor, bool isDarkMode) {
-      const heroAssetPath =
-          'assets/edu_hero.svg'; // <-- ganti kalau nama file beda
-
-      final gradient = LinearGradient(
-        colors: isDarkMode
-            ? const [Color(0xFF1B3C36), Color(0xFF0F2A26)]
-            : const [Color(0xFFB2DFDB), Color(0xFFE0F2F1)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      );
-
-      final titleColor =
-          isDarkMode ? Colors.white : const Color(0xFF004D40);
-      final subtitleColor = isDarkMode
-          ? Colors.white70
-          : const Color(0xFF004D40).withOpacity(0.8);
-
-      return InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const EducationScreen(),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          width: double.infinity,
-          height: 150,
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
+    return InkWell(
+      onTap: () {
+        if (_selectedIndex == 2) return;
+        setState(() {
+          _selectedIndex = 2; // Pindah ke Tab Edukasi (Instan)
+        });
+      },
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        height: 150,
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
                 color: Colors.black.withOpacity(0.08),
                 blurRadius: 8,
-                offset: const Offset(0, 4),
+                offset: const Offset(0, 4))
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Edukasi',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold, color: titleColor)),
+                    const SizedBox(height: 4),
+                    Text('Bahaya Rokok & Vape',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: subtitleColor)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, size: 18, color: subtitleColor),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Lihat video & artikel singkat buat bantu kamu berhenti.',
+                            style: TextStyle(fontSize: 12, color: subtitleColor),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 100,
+                width: 100,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SvgPicture.asset(heroAssetPath, fit: BoxFit.cover),
+                ),
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 18, vertical: 16),
-            child: Row(
-              children: [
-                // TEKS KIRI (TIDAK BERUBAH)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Edukasi',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: titleColor,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Bahaya Rokok & Vape',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: subtitleColor,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.lightbulb_outline,
-                            size: 18,
-                            color: subtitleColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Lihat video & artikel singkat buat bantu kamu berhenti.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: subtitleColor,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 10),
-
-                // ===================================================
-                // BAGIAN ILUSTRASI KANAN (YANG DIPERBAIKI)
-                // ===================================================
-                SizedBox(
-                  height: 100,
-                  width: 100,
-                  // Bungkus dengan ClipRRect untuk membuat sudut tumpul
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12), // <-- Atur tingkat tumpul di sini
-                    child: SvgPicture.asset(
-                      heroAssetPath,
-                      // Gunakan BoxFit.cover agar gambar mengisi penuh kotak rounded-nya
-                      fit: BoxFit.cover, 
-                    ),
-                  ),
-                ),
-                // ===================================================
-              ],
-            ),
-          ),
         ),
-      );
-    }
+      ),
+    );
+  }
 }

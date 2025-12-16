@@ -1,6 +1,12 @@
 // lib/screens/chat_history_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart'; // Wajib ada di pubspec.yaml
 import '../services/chat_log_service.dart';
+
+// ---------------------------------------------------------------------------
+// SCREEN 1: LIST RIWAYAT (DAFTAR TANGGAL)
+// ---------------------------------------------------------------------------
 
 class ChatHistoryScreen extends StatefulWidget {
   const ChatHistoryScreen({super.key});
@@ -30,7 +36,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   }
 
   Future<void> _openDetail(String dateKey) async {
-    // load all messages and filter by date
+    // Load semua pesan lalu filter berdasarkan tanggal
     final all = await ChatLogService.loadAllMessages();
     final items = all.where((m) {
       final created = DateTime.tryParse(m['createdAt'] ?? '')?.toLocal() ?? DateTime.now();
@@ -46,13 +52,12 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
       ),
     );
 
-    // refresh after returning in case user cleared
+    // Refresh setelah kembali (jaga-jaga user menghapus history)
     await _loadSummaries();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Riwayat Percakapan')),
       body: _loading
@@ -70,7 +75,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                     final last = s['lastMessage'] as String;
                     final prettyDate = _prettyDate(dateKey);
                     return ListTile(
-                      leading: CircleAvatar(child: const Icon(Icons.history)),
+                      leading: const CircleAvatar(child: Icon(Icons.history)),
                       title: Text(prettyDate),
                       subtitle: Text(last, maxLines: 1, overflow: TextOverflow.ellipsis),
                       trailing: Text('$count'),
@@ -79,7 +84,8 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                   },
                 ),
       floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.delete_forever),
+        backgroundColor: Colors.red,
+        child: const Icon(Icons.delete_forever, color: Colors.white),
         tooltip: 'Hapus semua riwayat',
         onPressed: () async {
           final ok = await showDialog<bool>(
@@ -116,6 +122,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// SCREEN 2: DETAIL CHAT (BUBBLE CHAT)
+// ---------------------------------------------------------------------------
+
 class ChatHistoryDetailScreen extends StatelessWidget {
   final String dateKey;
   final List<Map<String, dynamic>> messages;
@@ -123,11 +133,14 @@ class ChatHistoryDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Sorting pesan agar urut waktu
     messages.sort((a, b) {
       final ta = DateTime.tryParse(a['createdAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
       final tb = DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
       return ta.compareTo(tb);
     });
+
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: Text('Percakapan: ${_prettyDate(dateKey)}')),
@@ -136,26 +149,59 @@ class ChatHistoryDetailScreen extends StatelessWidget {
         itemCount: messages.length,
         itemBuilder: (ctx, i) {
           final m = messages[i];
-          final isUser = (m['isUser'] == true);
+          
+          // 2. Cek Pengirim (Support boolean true atau integer 1)
+          final isUser = (m['isUser'] == true || m['isUser'] == 1);
+          
           final text = m['text'] as String? ?? '';
           final created = DateTime.tryParse(m['createdAt'] ?? '')?.toLocal() ?? DateTime.now();
+
+          // 3. LOGIC WARNA BUBBLE (FIXED: User Pakai HIJAU WA)
+          final bubbleColor = isUser
+              ? const Color(0xFF00A884) // <--- INI HIJAU KHAS WHATSAPP
+              : isDarkMode
+                  ? const Color(0xFF303030) // AI Dark Mode (Abu Gelap)
+                  : Colors.grey[200];       // AI Light Mode (Abu Terang)
+
+          // 4. LOGIC WARNA TEXT
+          final textColor = isUser 
+              ? Colors.white 
+              : (isDarkMode ? Colors.white : Colors.black);
+
           return Align(
             alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.85, // Max 85% lebar layar
+              ),
               margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isUser ? Theme.of(context).colorScheme.primary : Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E1E) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
+                color: bubbleColor,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(12),
+                  topRight: const Radius.circular(12),
+                  // Buntat di sisi pengirim, tumpul di sisi lawan
+                  bottomLeft: isUser ? const Radius.circular(12) : const Radius.circular(0),
+                  bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(12),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(text, style: TextStyle(color: isUser ? Colors.white : (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black))),
+                  // 5. RENDER MARKDOWN (Agar bintang ** hilang dan jadi Bold)
+                  MarkdownBody(
+                    data: text,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(color: textColor, fontSize: 16),
+                      strong: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                      blockSpacing: 8.0,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Text(
-                    '${created.hour.toString().padLeft(2,'0')}:${created.minute.toString().padLeft(2,'0')}',
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}',
+                    style: TextStyle(fontSize: 10, color: textColor.withOpacity(0.7)),
                   ),
                 ],
               ),
