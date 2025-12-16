@@ -1,6 +1,8 @@
+import 'dart:convert'; // [PENTING] Untuk urus data JSON bookmark
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // [PENTING] Untuk simpan bookmark
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -23,20 +25,22 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   bool _loadingMarkdown = false;
 
   // =======================
+  // STATE BOOKMARK
+  // =======================
+  bool _isBookmarked = false;
+  static const _bookmarkKey = 'cihuy_edu_bookmarks_v1'; // Key harus sama dengan halaman lain
+
+  // =======================
   // GETTER DATA
   // =======================
 
-  String get _title =>
-      (widget.item['title'] ?? 'Tanpa Judul').toString();
+  String get _title => (widget.item['title'] ?? 'Tanpa Judul').toString();
 
-  String get _summary =>
-      (widget.item['summary'] ?? '').toString();
+  String get _summary => (widget.item['summary'] ?? '').toString();
 
-  String get _contentFromDb =>
-      (widget.item['content_markdown'] ?? '').toString();
+  String get _contentFromDb => (widget.item['content_markdown'] ?? '').toString();
 
-  String get _updatedRaw =>
-      (widget.item['updated_at'] ?? '').toString();
+  String get _updatedRaw => (widget.item['updated_at'] ?? '').toString();
 
   String? get _videoUrl {
     final v = widget.item['video_url'];
@@ -71,6 +75,9 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   void initState() {
     super.initState();
 
+    // 1. Cek apakah artikel ini sudah dibookmark sebelumnya?
+    _checkBookmarkStatus();
+
     if (_videoUrl != null) {
       _initYoutube(_videoUrl!);
     }
@@ -85,6 +92,68 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     _ytController?.dispose();
     super.dispose();
   }
+
+  // =======================
+  // LOGIKA BOOKMARK
+  // =======================
+
+  Future<void> _checkBookmarkStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_bookmarkKey);
+    if (raw != null) {
+      try {
+        final List<dynamic> list = jsonDecode(raw);
+        // Cek apakah ID artikel ini ada di daftar bookmark
+        final id = widget.item['id'].toString();
+        if (list.contains(id)) {
+          if (mounted) setState(() => _isBookmarked = true);
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_bookmarkKey);
+    
+    // Ambil daftar bookmark lama
+    List<String> currentBookmarks = [];
+    if (raw != null) {
+      try {
+        currentBookmarks = (jsonDecode(raw) as List).map((e) => e.toString()).toList();
+      } catch (_) {}
+    }
+
+    final id = widget.item['id'].toString();
+
+    // Logic Tambah / Hapus
+    if (_isBookmarked) {
+      currentBookmarks.remove(id); // Hapus
+    } else {
+      currentBookmarks.add(id); // Tambah
+    }
+
+    // Simpan lagi ke HP
+    await prefs.setString(_bookmarkKey, jsonEncode(currentBookmarks));
+
+    setState(() {
+      _isBookmarked = !_isBookmarked;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isBookmarked ? "Disimpan ke bookmark" : "Dihapus dari bookmark"),
+          duration: const Duration(seconds: 1),
+          backgroundColor: _isBookmarked ? Colors.green : Colors.red,
+        ),
+      );
+    }
+  }
+
+  // =======================
+  // LOGIKA VIDEO & MARKDOWN
+  // =======================
 
   void _initYoutube(String url) {
     final id = YoutubePlayer.convertUrlToId(url);
@@ -110,8 +179,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
       if (res.statusCode == 200) {
         _markdownRemote = res.body;
       }
-    } catch (_) {}
-    finally {
+    } catch (_) {} finally {
       if (mounted) setState(() => _loadingMarkdown = false);
     }
   }
@@ -138,7 +206,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   }
 
   // =======================
-  // VIDEO
+  // UI WIDGETS
   // =======================
 
   Widget _buildVideoArea() {
@@ -162,10 +230,6 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
     );
   }
 
-  // =======================
-  // MARKDOWN
-  // =======================
-
   Widget _buildMarkdownContent() {
     final md = _markdownRemote.isNotEmpty
         ? _markdownRemote
@@ -182,8 +246,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         children: [
-          if (_loadingMarkdown)
-            const LinearProgressIndicator(minHeight: 2),
+          if (_loadingMarkdown) const LinearProgressIndicator(minHeight: 2),
           const SizedBox(height: 8),
           MarkdownBody(
             data: md,
@@ -199,7 +262,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
   }
 
   // =======================
-  // BUILD
+  // BUILD UTAMA
   // =======================
 
   @override
@@ -211,6 +274,16 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
       appBar: AppBar(
         title: Text(_title),
         actions: [
+          // TOMBOL BOOKMARK (LANGSUNG DI DETAIL SCREEN)
+          IconButton(
+            onPressed: _toggleBookmark,
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: _isBookmarked ? Colors.amber : null,
+            ),
+            tooltip: _isBookmarked ? "Hapus Bookmark" : "Simpan Bookmark",
+          ),
+          
           if (_videoUrl != null)
             IconButton(
               icon: const Icon(Icons.ondemand_video),
@@ -237,7 +310,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          // HEADER
+          // HEADER TITLE
           Container(
             color: Theme.of(context).colorScheme.primary.withOpacity(0.06),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -264,7 +337,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
             ),
           ),
 
-          // ================= FIXED SUMMARY =================
+          // SUMMARY BOX
           if (_summary.isNotEmpty)
             Container(
               margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -300,8 +373,7 @@ class _EducationDetailScreenState extends State<EducationDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Card(
                 child: ListTile(
-                  leading: const Icon(Icons.picture_as_pdf,
-                      color: Colors.redAccent),
+                  leading: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
                   title: const Text('Buka dokumen PDF'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {

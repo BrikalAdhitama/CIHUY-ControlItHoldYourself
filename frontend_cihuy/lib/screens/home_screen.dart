@@ -369,112 +369,114 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _showRelapseAmountDialog(
-      {required bool isRokok, required bool isVape}) {
-    _rokokController.clear();
-    _vapeController.clear();
+        {required bool isRokok, required bool isVape}) {
+      _rokokController.clear();
+      _vapeController.clear();
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Berapa banyak?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isRokok)
-              TextField(
-                controller: _rokokController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Jumlah Batang Rokok',
-                    icon: Icon(Icons.smoke_free)),
-              ),
-            if (isVape)
-              TextField(
-                controller: _vapeController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Jumlah Hisapan Vape',
-                    icon: Icon(Icons.vaping_rooms)),
-              ),
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Berapa banyak?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isRokok)
+                TextField(
+                  controller: _rokokController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'Jumlah Batang Rokok',
+                      icon: Icon(Icons.smoke_free)),
+                ),
+              if (isVape)
+                TextField(
+                  controller: _vapeController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'Jumlah Hisapan Vape',
+                      icon: Icon(Icons.vaping_rooms)),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                Navigator.pop(context);
+                // [UPDATE DI SINI] Kirim status mode ke fungsi process
+                _processRelapse(reqRokok: isRokok, reqVape: isVape);
+              },
+              child: const Text('Reset Timer',
+                  style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(context);
-              _processRelapse();
-            },
-            child: const Text('Reset Timer',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+      );
+    }
 
-  Future<void> _processRelapse() async {
+// [PERBAIKAN] Tambahkan parameter reqRokok dan reqVape
+  Future<void> _processRelapse({required bool reqRokok, required bool reqVape}) async {
     final rokokText = _rokokController.text.trim();
     final vapeText = _vapeController.text.trim();
 
-    int? rokokCount;
-    int? vapeCount;
+    // Default ke 0 jika kosong/error, biar mudah divalidasi
+    int rokokCount = int.tryParse(rokokText) ?? 0;
+    int vapeCount = int.tryParse(vapeText) ?? 0;
 
-    // ================= VALIDASI INPUT =================
+    // ================= VALIDASI KETAT (INI YANG BARU) =================
 
-    // Validasi rokok
-    if (rokokText.isNotEmpty) {
-      rokokCount = int.tryParse(rokokText);
-      if (rokokCount == null || rokokCount < 0) {
+    // 1. Validasi Mode "KEDUANYA" (Wajib Dua-duanya > 0)
+    if (reqRokok && reqVape) {
+      if (rokokCount <= 0 || vapeCount <= 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Jumlah rokok tidak valid.'),
+            content: Text('Pilih "Keduanya" wajib isi jumlah Rokok DAN Vape (min 1).'),
             backgroundColor: Colors.red,
           ),
         );
-        return; // ⛔ STOP — JANGAN RESET TIMER
+        return; // ⛔ STOP DI SINI
       }
-    }
-
-    // Validasi vape
-    if (vapeText.isNotEmpty) {
-      vapeCount = int.tryParse(vapeText);
-      if (vapeCount == null || vapeCount < 0) {
+    } 
+    // 2. Validasi Mode "ROKOK SAJA"
+    else if (reqRokok) {
+      if (rokokCount <= 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Jumlah hisapan vape tidak valid.'),
+            content: Text('Jumlah rokok minimal 1 batang.'),
             backgroundColor: Colors.red,
           ),
         );
-        return; // ⛔ STOP — JANGAN RESET TIMER
+        return; // ⛔ STOP
       }
-    }
-
-    final safeRokok = rokokCount ?? 0;
-    final safeVape = vapeCount ?? 0;
-
-    // Kalau dua-duanya 0 → tetap error
-    if (safeRokok == 0 && safeVape == 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Isi dulu jumlah rokok / hisapan vape-nya.'),
-        ),
-      );
-      return; // ⛔ STOP
+      vapeCount = 0; // Pastikan vape 0 (bersih-bersih data)
+    } 
+    // 3. Validasi Mode "VAPE SAJA"
+    else if (reqVape) {
+      if (vapeCount <= 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Jumlah hisapan vape minimal 1.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return; // ⛔ STOP
+      }
+      rokokCount = 0; // Pastikan rokok 0 (bersih-bersih data)
     }
 
     // ================= CALL API =================
+    // (Kode ke bawah sama persis, cuma copy paste aja biar lengkap)
 
     final dynamic res = await AuthService.resetTimer(
       widget.username,
-      rokok: safeRokok,
-      vape: safeVape,
+      rokok: rokokCount,
+      vape: vapeCount,
     );
 
     bool success = false;
