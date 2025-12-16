@@ -68,10 +68,10 @@ if GEMINI_API_KEY:
     try:
         # Menggunakan model Flash agar respons cepat dan token output panjang
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash", 
+            model_name="gemini-2.5-flash", 
             system_instruction=SYSTEM_INSTRUCTION
         )
-        print("[AI] Gemini-1.5-Flash Ready 🧠")
+        print("[AI] Gemini-2.5-Flash Ready 🧠")
     except Exception as e:
         print(f"[AI SETUP ERROR] {e}")
 else:
