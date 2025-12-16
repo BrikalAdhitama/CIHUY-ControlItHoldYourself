@@ -143,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text('Teman Curhat CiHuy'),
+        title: const Text('Curhat bersama Cia'),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
