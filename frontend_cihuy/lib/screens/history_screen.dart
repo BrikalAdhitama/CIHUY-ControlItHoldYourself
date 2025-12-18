@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+// Pastikan import ini sesuai dengan struktur project kamu
 import '../services/auth_service.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
 
-  /// tanggal pertama kali ada data di DB
+  /// tanggal pertama kali ada data di DB (atau awal bulan)
   DateTime? _minTrackedDate;
 
   /// relapse terakhir yang tercatat di DB
@@ -55,11 +56,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _loadFullHistory() async {
     setState(() => _loading = true);
 
+    // Ambil data dari database (Supabase via AuthService)
     final raw = await AuthService.getFullHistory();
 
     // map sementara, hanya tanggal yang benar-benar ada di DB
     final temp = <DateTime, Map<String, dynamic>>{};
-    DateTime? minDate;
+    DateTime? minDateFromDb;
     DateTime? lastRelapse;
 
     for (final row in raw) {
@@ -76,36 +78,56 @@ class _HistoryScreenState extends State<HistoryScreen> {
         'detail': row['detail'],
       };
 
-      // min tanggal yang pernah tercatat
-      if (minDate == null || key.isBefore(minDate!)) {
-        minDate = key;
+      // Cari tanggal paling lama yang ADA di database
+      if (minDateFromDb == null || key.isBefore(minDateFromDb)) {
+        minDateFromDb = key;
       }
 
-      // relapse terakhir (kalau mau dipakai di tempat lain)
+      // Cari relapse terakhir
       final status = row['status']?.toString() ?? '';
       if (status == 'relapse') {
-        if (lastRelapse == null || key.isAfter(lastRelapse!)) {
+        if (lastRelapse == null || key.isAfter(lastRelapse)) {
           lastRelapse = key;
         }
       }
     }
 
     final today = _normalizeDate(DateTime.now());
-    // kalau belum ada data sama sekali, anggap mulai hari ini
-    minDate ??= today;
+    
+    // --- PERBAIKAN LOGIC DI SINI ---
+    // Kita set start date minimal dari TANGGAL 1 BULAN INI.
+    // Supaya kalender terlihat hijau dari awal bulan, bukan cuma hari ini.
+    final startOfMonth = DateTime(today.year, today.month, 1);
+    
+    DateTime startDateCursor;
 
-    // ===== BANGUN MAP FINAL: tiap hari dari minDate s/d today =====
+    if (minDateFromDb == null) {
+       // Kalau DB kosong, start dari awal bulan ini
+       startDateCursor = startOfMonth;
+    } else {
+       // Kalau DB ada isinya, kita cek: mana yang lebih dulu?
+       // Awal bulan atau record pertama DB?
+       // Kita ambil yang paling lampau supaya kalender penuh.
+       if (startOfMonth.isBefore(minDateFromDb)) {
+         startDateCursor = startOfMonth;
+       } else {
+         startDateCursor = minDateFromDb;
+       }
+    }
+    // -------------------------------
+
+    // ===== BANGUN MAP FINAL: tiap hari dari startDateCursor s/d today =====
     final fullMap = <DateTime, Map<String, dynamic>>{};
-    DateTime cursor = minDate!;
+    DateTime cursor = startDateCursor;
 
     while (!cursor.isAfter(today)) {
       final key = _normalizeDate(cursor);
 
       if (temp.containsKey(key)) {
-        // ada record di DB -> pakai apa adanya
+        // KASUS 1: Ada record di DB (bisa relapse, bisa manual success) -> pakai data DB
         fullMap[key] = temp[key]!;
       } else {
-        // ga ada record -> hari sukses (bebas)
+        // KASUS 2: Tidak ada record di DB -> otomatis dianggap SUKSES (Bebas)
         fullMap[key] = {
           'date': DateFormat('yyyy-MM-dd').format(cursor),
           'status': 'success',
@@ -118,29 +140,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     setState(() {
       _historyByDate = fullMap;
-      _minTrackedDate = minDate;
+      _minTrackedDate = startDateCursor;
       _lastRelapseDate = lastRelapse;
+      
+      // Update focused day & selected day ke hari ini
       _focusedDay = today;
       _selectedDay = today;
+      
       _loading = false;
     });
   }
 
-/// Sekarang simple aja: baca dari _historyByDate
-String _statusForDay(DateTime day) {
-  final d = _normalizeDate(day);
-  final today = _normalizeDate(DateTime.now());
+  /// Helper penentuan status UI
+  String _statusForDay(DateTime day) {
+    final d = _normalizeDate(day);
+    final today = _normalizeDate(DateTime.now());
 
-  if (d.isAfter(today)) return 'neutral'; // masa depan -> abu-abu
+    // Masa depan -> Neutral (abu-abu)
+    if (d.isAfter(today)) return 'neutral'; 
 
-  final data = _historyByDate[d];
-  final rawStatus = data?['status']?.toString() ?? '';
+    final data = _historyByDate[d];
+    final rawStatus = data?['status']?.toString() ?? '';
 
-  if (rawStatus == 'relapse') return 'relapse';
-  if (rawStatus == 'success') return 'success';
+    // Prioritas status
+    if (rawStatus == 'relapse') return 'relapse';
+    if (rawStatus == 'success') return 'success';
 
-  return 'neutral';
-}
+    // Fallback kalau logic loadFullHistory benar, harusnya jarang masuk sini untuk tanggal yg sudah lewat
+    return 'neutral';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +241,7 @@ String _statusForDay(DateTime day) {
                         );
                       },
                       outsideBuilder: (context, day, focusedDay) {
-                        // tanggal di luar bulan, tapi tetap pakai status (biar konsisten)
+                        // tanggal di luar bulan, tapi tetap pakai status (biar konsisten visualnya)
                         final status = _statusForDay(day);
                         final colors = _colorsForStatus(status, isDark)
                             .copyWith(bgOverride: Colors.grey.withOpacity(0.15));
@@ -240,7 +268,7 @@ String _statusForDay(DateTime day) {
                           day.day,
                           bgColor: colors.bg,
                           textColor: colors.text,
-                          borderColor: Colors.black87,
+                          borderColor: isDark ? Colors.white : Colors.black87,
                         );
                       },
                     ),
