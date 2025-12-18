@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // Pastikan import ini ada
 
-// Pastikan import ini sesuai dengan struktur project kamu
 import '../services/auth_service.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -17,13 +17,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool _loading = true;
 
   /// Map tanggal (date-only) -> data record
-  /// key: DateTime(y, m, d) (jam 00:00)
   Map<DateTime, Map<String, dynamic>> _historyByDate = {};
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
 
-  /// tanggal pertama kali ada data di DB (atau awal bulan)
+  /// tanggal dimulainya tracking (berdasarkan tgl daftar akun)
   DateTime? _minTrackedDate;
 
   /// relapse terakhir yang tercatat di DB
@@ -56,10 +55,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _loadFullHistory() async {
     setState(() => _loading = true);
 
-    // Ambil data dari database (Supabase via AuthService)
+    // 1. Ambil history dari Database
     final raw = await AuthService.getFullHistory();
 
-    // map sementara, hanya tanggal yang benar-benar ada di DB
     final temp = <DateTime, Map<String, dynamic>>{};
     DateTime? minDateFromDb;
     DateTime? lastRelapse;
@@ -71,19 +69,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
       final key = _normalizeDate(d);
 
-      // simpan record mentah dari DB
+      // Simpan data DB ke map sementara
       temp[key] = {
         'date': dateStr,
         'status': row['status'],
         'detail': row['detail'],
       };
 
-      // Cari tanggal paling lama yang ADA di database
+      // Cari tanggal paling tua yang ada di DB
       if (minDateFromDb == null || key.isBefore(minDateFromDb)) {
         minDateFromDb = key;
       }
 
-      // Cari relapse terakhir
+      // Cari tanggal relapse terakhir
       final status = row['status']?.toString() ?? '';
       if (status == 'relapse') {
         if (lastRelapse == null || key.isAfter(lastRelapse)) {
@@ -93,80 +91,80 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     final today = _normalizeDate(DateTime.now());
-    
-    // --- PERBAIKAN LOGIC DI SINI ---
-    // Kita set start date minimal dari TANGGAL 1 BULAN INI.
-    // Supaya kalender terlihat hijau dari awal bulan, bukan cuma hari ini.
-    final startOfMonth = DateTime(today.year, today.month, 1);
-    
-    DateTime startDateCursor;
 
-    if (minDateFromDb == null) {
-       // Kalau DB kosong, start dari awal bulan ini
-       startDateCursor = startOfMonth;
-    } else {
-       // Kalau DB ada isinya, kita cek: mana yang lebih dulu?
-       // Awal bulan atau record pertama DB?
-       // Kita ambil yang paling lampau supaya kalender penuh.
-       if (startOfMonth.isBefore(minDateFromDb)) {
-         startDateCursor = startOfMonth;
-       } else {
-         startDateCursor = minDateFromDb;
-       }
+    // 2. Tentukan START DATE Tracking
+    //    Logic: Mulai tracking dari "Tanggal Pembuatan Akun"
+    DateTime startCursor = today;
+
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null && user.createdAt.isNotEmpty) {
+      try {
+        final created = DateTime.parse(user.createdAt).toLocal();
+        startCursor = _normalizeDate(created);
+      } catch (_) {
+        // Fallback ke hari ini kalau gagal parse
+        startCursor = today;
+      }
     }
-    // -------------------------------
 
-    // ===== BANGUN MAP FINAL: tiap hari dari startDateCursor s/d today =====
+    // Tapi, kalau ternyata di DB ada data yang LEBIH TUA dari tanggal pembuatan akun
+    // (misal karena input manual mundur tanggal), kita pakai tanggal dari DB.
+    if (minDateFromDb != null && minDateFromDb.isBefore(startCursor)) {
+      startCursor = minDateFromDb;
+    }
+
+    // 3. Loop dari StartDate s/d Hari Ini
     final fullMap = <DateTime, Map<String, dynamic>>{};
-    DateTime cursor = startDateCursor;
+    DateTime cursor = startCursor;
+
+    // Safety: jangan biarkan loop kalau cursor di masa depan
+    if (cursor.isAfter(today)) cursor = today;
 
     while (!cursor.isAfter(today)) {
       final key = _normalizeDate(cursor);
 
       if (temp.containsKey(key)) {
-        // KASUS 1: Ada record di DB (bisa relapse, bisa manual success) -> pakai data DB
+        // Ada data di DB (Relapse / Manual Success) -> Pakai data DB
         fullMap[key] = temp[key]!;
       } else {
-        // KASUS 2: Tidak ada record di DB -> otomatis dianggap SUKSES (Bebas)
+        // Tidak ada data di DB -> Otomatis dianggap SUKSES
+        // (Asumsinya kalau user sudah punya akun tapi gak lapor relapse, berarti dia aman)
         fullMap[key] = {
           'date': DateFormat('yyyy-MM-dd').format(cursor),
           'status': 'success',
           'detail': '',
         };
       }
-
       cursor = cursor.add(const Duration(days: 1));
     }
 
     setState(() {
       _historyByDate = fullMap;
-      _minTrackedDate = startDateCursor;
+      _minTrackedDate = startCursor;
       _lastRelapseDate = lastRelapse;
-      
-      // Update focused day & selected day ke hari ini
       _focusedDay = today;
       _selectedDay = today;
-      
       _loading = false;
     });
   }
 
-  /// Helper penentuan status UI
+  /// Helper penentuan status untuk UI Kalender
   String _statusForDay(DateTime day) {
     final d = _normalizeDate(day);
     final today = _normalizeDate(DateTime.now());
 
-    // Masa depan -> Neutral (abu-abu)
-    if (d.isAfter(today)) return 'neutral'; 
+    // Masa depan -> Abu-abu
+    if (d.isAfter(today)) return 'neutral';
 
     final data = _historyByDate[d];
-    final rawStatus = data?['status']?.toString() ?? '';
+    
+    // Kalau tidak ada di map (berarti sebelum tanggal daftar akun) -> Abu-abu
+    if (data == null) return 'neutral';
 
-    // Prioritas status
+    final rawStatus = data['status']?.toString() ?? '';
     if (rawStatus == 'relapse') return 'relapse';
     if (rawStatus == 'success') return 'success';
 
-    // Fallback kalau logic loadFullHistory benar, harusnya jarang masuk sini untuk tanggal yg sudah lewat
     return 'neutral';
   }
 
@@ -185,10 +183,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               children: [
                 const SizedBox(height: 8),
                 _buildLegendRow(isDark),
+                
                 // ====== KALENDER ======
                 Container(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -224,7 +222,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       rightChevronIcon: const Icon(Icons.chevron_right),
                     ),
                     calendarStyle: const CalendarStyle(
-                      // dekorasi default di-override sama builders
                       markerDecoration: BoxDecoration(
                         color: Colors.redAccent,
                         shape: BoxShape.circle,
@@ -241,7 +238,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         );
                       },
                       outsideBuilder: (context, day, focusedDay) {
-                        // tanggal di luar bulan, tapi tetap pakai status (biar konsisten visualnya)
                         final status = _statusForDay(day);
                         final colors = _colorsForStatus(status, isDark)
                             .copyWith(bgOverride: Colors.grey.withOpacity(0.15));
@@ -309,6 +305,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           text: Colors.white,
         );
       default:
+        // Status Neutral (sebelum tracking / masa depan)
         return _StatusColors(
           bg: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
           text: isDark ? Colors.white70 : Colors.black87,
@@ -415,7 +412,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       statusColor = Colors.grey;
       statusIcon = Icons.radio_button_unchecked;
       detail =
-          'Hari ini (atau tanggal ini) belum ada riwayat yang tercatat.';
+          'Hari ini (atau tanggal ini) belum ada riwayat karena belum tracking.';
     }
 
     return Padding(
