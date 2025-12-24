@@ -62,6 +62,12 @@ class _EducationScreenState extends State<EducationScreen> {
     setState(() {});
   }
 
+  @override
+  void didChangeDependencies() {
+  super.didChangeDependencies();
+  _loadBookmarks();
+}
+
   // ================= CACHE + FETCH =================
   Future<void> _loadCachedThenRemote() async {
     setState(() => _loading = true);
@@ -303,10 +309,9 @@ class _EducationScreenState extends State<EducationScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          EducationDetailScreen(item: item),
+                                      builder: (_) => EducationDetailScreen(item: item),
                                     ),
-                                  );
+                                  ).then((_) => _loadBookmarks());
                                 },
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
