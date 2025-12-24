@@ -50,7 +50,7 @@ Jadi yang kena imbas bukan cuma kamu, tapi satu rumah.
 
 ## Merokok Itu Mahal Serius!
 
-WHO juga ngasih kalkulator biaya. Rata-rata **5–15% pendapatan seseorang habis cuma buat rokok**. Kalau dihitung bertahun-tahun… itu bisa jadi uang liburan, laptop, motor—bahkan tabungan masa depan.
+WHO juga ngasih kalkulator biaya. Rata-rata **5-15% pendapatan seseorang habis cuma buat rokok**. Kalau dihitung bertahun-tahun... itu bisa jadi uang liburan, laptop, motor - bahkan tabungan masa depan.
 
 ---
 
