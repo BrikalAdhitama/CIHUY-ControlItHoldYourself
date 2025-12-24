@@ -109,7 +109,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
     } catch (_) {
       if (mounted) {
         _addMessage(
-          'Cia lagi susah dihubungi. Coba sebentar lagi ya.',
+          'Ciaa lagi susah dihubungi. Coba sebentar lagi ya.',
           false,
           saveToDb: false 
         );
@@ -143,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text('Curhat bersama Cia'),
+        title: const Text('Curhat bersama Ciaa'),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
@@ -191,7 +191,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Cia sedang mengetik...',
+                      'Ciaa sedang mengetik...',
                       style: TextStyle(
                         fontStyle: FontStyle.italic,
                         color: isDark ? Colors.grey[400] : Colors.grey,

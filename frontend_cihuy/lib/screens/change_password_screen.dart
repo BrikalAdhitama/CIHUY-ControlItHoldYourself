@@ -27,7 +27,6 @@ class _ChangePasswordScreenState
     final newPass = _newPass.text.trim();
     final confirmPass = _confirmPass.text.trim();
 
-    // ===== VALIDASI =====
     if (oldPass.isEmpty ||
         newPass.isEmpty ||
         confirmPass.isEmpty) {
@@ -48,8 +47,8 @@ class _ChangePasswordScreenState
     }
 
     if (newPass != confirmPass) {
-      setState(() =>
-          _error = 'Konfirmasi password tidak sama.');
+      setState(
+          () => _error = 'Konfirmasi password tidak sama.');
       return;
     }
 
@@ -65,8 +64,7 @@ class _ChangePasswordScreenState
       if (user == null || user.email == null) {
         setState(() {
           _loading = false;
-          _error =
-              'Session tidak valid. Silakan login ulang.';
+          _error = 'Session tidak valid. Silakan login ulang.';
         });
         return;
       }
@@ -97,7 +95,7 @@ class _ChangePasswordScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Password berhasil diganti.'),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFF00796B),
         ),
       );
 
@@ -156,19 +154,25 @@ class _ChangePasswordScreenState
   Widget build(BuildContext context) {
     final isDark =
         Theme.of(context).brightness == Brightness.dark;
-    final bgColor =
-        isDark ? const Color(0xFF121212) : Colors.white;
-    final accent =
-        isDark ? const Color(0xFF4DB6AC) : const Color(0xFF00796B);
+
+    // ===== WARNA CIHUY =====
+    const primary = Color(0xFF00796B);
+    const secondary = Color(0xFF4DB6AC);
+    const cihuyBg = Color(0xFFE0F2F1);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor:
+          isDark ? const Color(0xFF121212) : cihuyBg,
+
       appBar: AppBar(
         title: const Text('Ganti Password'),
-        backgroundColor: bgColor,
+        backgroundColor:
+            isDark ? const Color(0xFF121212) : cihuyBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: primary,
       ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -183,66 +187,103 @@ class _ChangePasswordScreenState
                       : Colors.grey[700],
                 ),
               ),
-              const SizedBox(height: 30),
-
-              // PASSWORD LAMA
-              TextField(
-                controller: _oldPass,
-                obscureText: !_showOld,
-                decoration: InputDecoration(
-                  labelText: 'Password Lama',
-                  prefixIcon:
-                      const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showOld
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                    onPressed: () =>
-                        setState(() => _showOld = !_showOld),
-                  ),
-                ),
-              ),
               const SizedBox(height: 20),
 
-              // PASSWORD BARU
-              TextField(
-                controller: _newPass,
-                obscureText: !_showNew,
-                decoration: InputDecoration(
-                  labelText: 'Password Baru',
-                  prefixIcon:
-                      const Icon(Icons.lock_reset),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showNew
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                    onPressed: () =>
-                        setState(() => _showNew = !_showNew),
-                  ),
+              // ===== CARD FORM =====
+              Card(
+                elevation: 0,
+                color:
+                    isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-              ),
-              const SizedBox(height: 20),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // PASSWORD LAMA
+                      TextField(
+                        controller: _oldPass,
+                        obscureText: !_showOld,
+                        decoration: InputDecoration(
+                          labelText: 'Password Lama',
+                          prefixIcon:
+                              const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showOld
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: secondary,
+                            ),
+                            onPressed: () => setState(
+                                () => _showOld = !_showOld),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide:
+                                const BorderSide(color: primary),
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
 
-              // KONFIRMASI PASSWORD
-              TextField(
-                controller: _confirmPass,
-                obscureText: !_showConfirm,
-                decoration: InputDecoration(
-                  labelText: 'Konfirmasi Password Baru',
-                  prefixIcon:
-                      const Icon(Icons.check_circle_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showConfirm
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                    onPressed: () => setState(
-                        () => _showConfirm = !_showConfirm),
+                      // PASSWORD BARU
+                      TextField(
+                        controller: _newPass,
+                        obscureText: !_showNew,
+                        decoration: InputDecoration(
+                          labelText: 'Password Baru',
+                          prefixIcon:
+                              const Icon(Icons.lock_reset),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showNew
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: secondary,
+                            ),
+                            onPressed: () => setState(
+                                () => _showNew = !_showNew),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide:
+                                const BorderSide(color: primary),
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // KONFIRMASI
+                      TextField(
+                        controller: _confirmPass,
+                        obscureText: !_showConfirm,
+                        decoration: InputDecoration(
+                          labelText: 'Konfirmasi Password Baru',
+                          prefixIcon: const Icon(
+                              Icons.check_circle_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: secondary,
+                            ),
+                            onPressed: () => setState(
+                                () => _showConfirm = !_showConfirm),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide:
+                                const BorderSide(color: primary),
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -251,34 +292,29 @@ class _ChangePasswordScreenState
 
               if (_error.isNotEmpty)
                 Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
                     _error,
-                    style:
-                        const TextStyle(color: Colors.red),
+                    style: const TextStyle(color: Colors.red),
                   ),
                 ),
 
-              const SizedBox(height: 10),
-
               _loading
-                  ? Center(
+                  ? const Center(
                       child: CircularProgressIndicator(
-                          color: accent),
+                        color: primary,
+                      ),
                     )
                   : ElevatedButton(
                       onPressed:
                           _confirmAndChangePassword,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accent,
+                        backgroundColor: primary,
                         foregroundColor: Colors.white,
                         padding:
-                            const EdgeInsets.symmetric(
-                                vertical: 14),
+                            const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(30),
                         ),
                       ),
                       child: const Text(

@@ -40,7 +40,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleNotif(bool value) async {
     setState(() => _loading = true);
     if (value) {
-      final granted = await NotificationService.requestPermissions();
+      final granted =
+          await NotificationService.requestPermissions();
       if (!mounted) return;
       if (!granted) _openSettingsDialog();
     } else {
@@ -54,7 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(turningOff ? 'Matikan Notifikasi' : 'Izin Dibutuhkan'),
+        title:
+            Text(turningOff ? 'Matikan Notifikasi' : 'Izin Dibutuhkan'),
         content: Text(
           turningOff
               ? 'Android tidak mengizinkan aplikasi mematikan notifikasi sendiri.\n\nSilakan matikan lewat pengaturan HP.'
@@ -82,7 +84,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Hapus Akun?', style: TextStyle(color: Colors.red)),
+        title: const Text(
+          'Hapus Akun?',
+          style: TextStyle(color: Colors.red),
+        ),
         content: const Text(
           'Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus secara permanen.',
         ),
@@ -124,13 +129,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Helper function to build a section card
+  // ===== SECTION CARD =====
   Widget _buildSectionCard(
       BuildContext context, String title, List<Widget> children) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final titleColor = isDark ? Colors.white70 : Colors.black54;
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
+    final cardColor =
+        isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final titleColor =
+        isDark ? Colors.white70 : Colors.black54;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,13 +154,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         Card(
-          elevation: 2,
+          elevation: 0,
           margin: const EdgeInsets.symmetric(horizontal: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           color: cardColor,
-          child: Column(
-            children: children,
-          ),
+          child: Column(children: children),
         ),
       ],
     );
@@ -164,16 +170,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = context.watch<ThemeProvider>();
     final isDark = theme.isDarkMode;
 
-    final bg = isDark ? const Color(0xFF121212) : Colors.grey.shade50;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    // ===== WARNA CIHUY =====
     const primaryColor = Color(0xFF00796B);
+    const cihuyBg = Color(0xFFE0F2F1);
+
+    final bgColor =
+        isDark ? const Color(0xFF121212) : cihuyBg;
+    final textColor =
+        isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text('Pengaturan',
-            style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-        backgroundColor: bg,
+        title: Text(
+          'Pengaturan',
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: bgColor,
         elevation: 0,
         scrolledUnderElevation: 0,
         iconTheme: IconThemeData(color: textColor),
@@ -189,7 +205,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: primaryColor,
-                  child: Icon(Icons.person_outline, color: Colors.white),
+                  child:
+                      Icon(Icons.person_outline, color: Colors.white),
                 ),
                 title: const Text('Profil Saya'),
                 subtitle: Text(widget.username),
@@ -197,7 +214,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ProfileScreen(username: widget.username),
+                    builder: (_) =>
+                        ProfileScreen(username: widget.username),
                   ),
                 ),
               ),
@@ -205,14 +223,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: primaryColor,
-                  child: Icon(Icons.lock_outline, color: Colors.white),
+                  child:
+                      Icon(Icons.lock_outline, color: Colors.white),
                 ),
                 title: const Text('Ganti Password'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const ChangePasswordScreen(),
+                    builder: (_) =>
+                        const ChangePasswordScreen(),
                   ),
                 ),
               ),
@@ -225,7 +245,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Colors.indigo.shade400,
-                  child: const Icon(Icons.dark_mode_outlined, color: Colors.white),
+                  child: const Icon(Icons.dark_mode_outlined,
+                      color: Colors.white),
                 ),
                 title: const Text('Tema Gelap'),
                 trailing: Switch(
@@ -238,17 +259,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Colors.amber.shade600,
-                  child: const Icon(Icons.notifications_active_outlined,
-                      color: Colors.white),
+                  child: const Icon(
+                    Icons.notifications_active_outlined,
+                    color: Colors.white,
+                  ),
                 ),
                 title: const Text('Notifikasi Pengingat'),
-                subtitle: Text(_notifEnabled ? 'Aktif' : 'Nonaktif'),
+                subtitle:
+                    Text(_notifEnabled ? 'Aktif' : 'Nonaktif'),
                 trailing: _loading
                     ? const SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: primaryColor),
+                          strokeWidth: 2,
+                          color: primaryColor,
+                        ),
                       )
                     : Switch(
                         value: _notifEnabled,
@@ -265,7 +291,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Colors.grey,
-                  child: Icon(Icons.info_outline, color: Colors.white),
+                  child:
+                      Icon(Icons.info_outline, color: Colors.white),
                 ),
                 title: const Text('Tentang Aplikasi'),
                 trailing: const Icon(Icons.chevron_right),
@@ -288,8 +315,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               elevation: 0,
               color: Colors.red.withOpacity(0.1),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.red.withOpacity(0.3))),
+                borderRadius: BorderRadius.circular(12),
+                side:
+                    BorderSide(color: Colors.red.withOpacity(0.3)),
+              ),
               child: InkWell(
                 onTap: _deleting ? null : _deleteAccount,
                 borderRadius: BorderRadius.circular(12),
@@ -297,11 +326,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.all(16.0),
                   child: _deleting
                       ? const Center(
-                          child: CircularProgressIndicator(color: Colors.red))
+                          child: CircularProgressIndicator(
+                              color: Colors.red),
+                        )
                       : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment:
+                              MainAxisAlignment.center,
                           children: const [
-                            Icon(Icons.delete_forever, color: Colors.red),
+                            Icon(Icons.delete_forever,
+                                color: Colors.red),
                             SizedBox(width: 8),
                             Text(
                               'Hapus Akun',
