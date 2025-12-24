@@ -85,7 +85,7 @@ Biasanya cuma 2–4 minggu. Setelah itu badan mulai adaptasi ulang.
 
 ---
 
-## Cara Memulai Berhenti — Panduan STAR WHO
+## Cara Memulai Berhenti - Panduan STAR WHO
 
 WHO nyaranin langkah **STAR** untuk mulai berhenti:
 
