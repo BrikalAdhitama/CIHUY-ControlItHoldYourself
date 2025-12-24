@@ -89,10 +89,10 @@ Biasanya cuma 2–4 minggu. Setelah itu badan mulai adaptasi ulang.
 
 WHO nyaranin langkah **STAR** untuk mulai berhenti:
 
-1. **S**et a quit date — tentukan tanggal berhenti
-2. **T**ell people — beri tahu keluarga/teman biar kamu dapat support
-3. **A**nticipate challenges — persiapkan diri hadapi pemicu & withdrawal
-4. **R**emove tobacco — buang semua rokok, hindari tempat pemicu
+1. **S**et a quit date - tentukan tanggal berhenti
+2. **T**ell people - beri tahu keluarga/teman biar kamu dapat support
+3. **A**nticipate challenges - persiapkan diri hadapi pemicu & withdrawal
+4. **R**emove tobacco - buang semua rokok, hindari tempat pemicu
 
 Bahkan cuma mulai berhenti **1 hari**, itu udah progres.
 
