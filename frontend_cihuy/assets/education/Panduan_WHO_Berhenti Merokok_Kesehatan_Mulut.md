@@ -26,7 +26,7 @@ Buat pasien penyakit mulut, merokok bikin perawatan jadi nggak efektif dan mempe
 
 ## Dampak Merokok Buat Keluarga (Second-Hand Smoke)
 
-WHO menegaskan perokok bukan satu-satunya yang kena dampaknya — keluargamu juga.
+WHO menegaskan perokok bukan satu-satunya yang kena dampaknya tapi keluargamu juga.
 
 ### Anak-anak bisa mengalami:
 
