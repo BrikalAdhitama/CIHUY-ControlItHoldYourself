@@ -104,6 +104,6 @@ Third-hand smoke membuktikan bahwa:
    *The Dangers of Thirdhand Smoke*
    Menegaskan bahwa perlindungan anak hanya efektif dengan lingkungan yang **100% bebas rokok**.
 
-4. **National Institutes of Health (NIH) – PubMed Central**
+4. **National Institutes of Health (NIH) - PubMed Central**
    *Thirdhand Smoke: State of the Science and a Call for Policy Expansion*
    Studi ilmiah mendalam mengenai daya tahan residu rokok di dalam rumah dan dampaknya terhadap kesehatan.
