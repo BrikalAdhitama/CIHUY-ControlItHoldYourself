@@ -6,7 +6,7 @@ Merokok bukan cuma nyerang paru-paru — mulutmu juga kena getahnya. Dua dokumen
 
 ## Kenapa Merokok Bahaya Banget Buat Kesehatan Mulut?
 
-Menurut WHO, tembakau—baik rokok maupun smokeless—punya efek langsung yang ngancurin jaringan mulut. Kandungan asap rokok aja ada **7000+ bahan kimia**, dan minimal **69 penyebab kanker**.
+Menurut WHO, tembakau - baik rokok maupun smokeless - punya efek langsung yang ngancurin jaringan mulut. Kandungan asap rokok aja ada **7000+ bahan kimia**, dan minimal **69 penyebab kanker**.
 
 Efek merokok pada mulut meliputi:
 
@@ -81,7 +81,7 @@ Nikotin bekerja seperti heroin & kokain terhadap otak. Ketika dihentikan tiba-ti
 - Susah tidur
 - Mood swing
 
-Biasanya cuma 2–4 minggu. Setelah itu badan mulai adaptasi ulang.
+Biasanya cuma 2-4 minggu. Setelah itu badan mulai adaptasi ulang.
 
 ---
 
