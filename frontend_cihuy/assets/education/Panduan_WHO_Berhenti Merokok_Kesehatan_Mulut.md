@@ -132,8 +132,6 @@ Sederhana 3-5 menit aja, tapi efeknya besar.
 - Intervensi singkat dari tenaga kesehatan gigi sangat efektif.
 - Semakin cepat berhenti, semakin besar peluang mencegah kerusakan permanen.
 
-Kalau mau, aku bisa ubah artikel ini jadi versi **majalah**, **poster edukasi**, atau **konten TikTok/Instagram** buat literasi kesehatan. Tinggal bilang format yang kamu mau gimana.
-
 ---
 
 ## Sumber Resmi WHO
