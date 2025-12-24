@@ -1,7 +1,5 @@
 # Panduan WHO: Berhenti Merokok & Kesehatan Mulut
 
-Merokok bukan cuma nyerang paru-paru — mulutmu juga kena getahnya. Dua dokumen WHO yang kamu kasih sebenarnya saling ngisi: satu fokus bantu pasien berhenti, satu lagi bahas bukti ilmiah & bagaimana tenaga kesehatan gigi harus ngasih intervensi. Jadi di bawah ini aku rangkum jadi **satu artikel utuh**, enak dibaca, dan gampang dipakai buat edukasi.
-
 ---
 
 ## Kenapa Merokok Bahaya Banget Buat Kesehatan Mulut?
