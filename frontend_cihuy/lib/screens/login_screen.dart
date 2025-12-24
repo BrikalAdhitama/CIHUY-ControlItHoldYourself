@@ -32,14 +32,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     if (response['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Login Berhasil! Halo, ${response['username']}'),
+          content: Text('Login berhasil! Halo, ${response['username']}'),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 1),
         ),
@@ -48,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => HomeScreen(username: response['username']),
+          builder: (_) => HomeScreen(username: response['username']),
         ),
       );
     } else {
@@ -67,155 +65,206 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final titleColor =
-        isDarkMode ? Colors.white : const Color(0xFF00796B);
-    final accentColor =
-        isDarkMode ? const Color(0xFF4DB6AC) : const Color(0xFF00796B);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final bgColor =
-        isDarkMode ? const Color(0xFF121212) : const Color(0xFFE0F2F1);
+        isDark ? const Color(0xFF121212) : const Color(0xFFE0F2F1);
+    final accentColor =
+        isDark ? const Color(0xFF4DB6AC) : const Color(0xFF00796B);
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 40.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Welcome To CIHUY!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
+      body: Column(
+        children: [
+          // ===== HEADER (SINGLE WAVE) =====
+          ClipPath(
+            clipper: SmoothWaveClipper(),
+            child: Container(
+              height: 230,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF00796B),
+                    Color(0xFF4DB6AC),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
-                const SizedBox(height: 50),
-
-                // EMAIL / USERNAME FIELD
-                CustomTextField(
-                  controller: _emailController,
-                  labelText: 'Email atau Username',
-                  prefixIcon: Icons.person_outline,
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'Welcome To CIHUY!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
                 ),
-                const SizedBox(height: 20),
+              ),
+            ),
+          ),
 
-                // PASSWORD FIELD
-                CustomTextField(
-                  controller: _passwordController,
-                  labelText: 'Password',
-                  obscureText: !_isPasswordVisible,
-                  prefixIcon: Icons.lock_outline,
-                  suffixIcon: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isPasswordVisible = !_isPasswordVisible;
-                      });
-                    },
-                    child: Text(
-                      _isPasswordVisible ? 'Sembunyikan' : 'Tampilkan',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+          // ===== FORM =====
+          Expanded(
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      CustomTextField(
+                        controller: _emailController,
+                        labelText: 'Email atau Username',
+                        prefixIcon: Icons.person_outline,
                       ),
-                    ),
-                  ),
-                ),
+                      const SizedBox(height: 20),
 
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ForgotPasswordScreen(),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      'Lupa password?',
-                      style: TextStyle(color: accentColor),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                if (_errorMessage.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10.0),
-                    child: Text(
-                      _errorMessage,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-
-                _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton(
-                        onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                      CustomTextField(
+                        controller: _passwordController,
+                        labelText: 'Password',
+                        obscureText: !_isPasswordVisible,
+                        prefixIcon: Icons.lock_outline,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: accentColor,
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          onPressed: () {
+                            setState(() {
+                              _isPasswordVisible = !_isPasswordVisible;
+                            });
+                          },
+                        ),
+                      ),
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const ForgotPasswordScreen(),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Lupa password?',
+                            style: TextStyle(color: accentColor),
+                          ),
+                        ),
+                      ),
+
+                      if (_errorMessage.isNotEmpty)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            _errorMessage,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+
+                      _isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(),
+                            )
+                          : ElevatedButton(
+                              onPressed: _login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(30),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                        vertical: 15),
+                              ),
+                              child: const Text(
+                                'Login',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                            ),
+
+                      const SizedBox(height: 36),
+
+                      const Center(
+                        child: Text(
+                          'Tidak punya akun?',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const RegisterScreen(),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                              color: accentColor, width: 2),
+                          foregroundColor: accentColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(30),
+                          ),
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  vertical: 15),
                         ),
                         child: const Text(
-                          'Login',
+                          'Buat Akun',
                           style: TextStyle(fontSize: 18),
                         ),
                       ),
-                const SizedBox(height: 40),
-
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Tidak punya akun? ',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const RegisterScreen(),
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: accentColor, width: 2),
-                    foregroundColor: accentColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                  ),
-                  child: const Text(
-                    'Buat Akun',
-                    style: TextStyle(fontSize: 18),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
+
+/// ===== SINGLE SMOOTH WAVE (FINAL) =====
+class SmoothWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 60);
+
+    path.quadraticBezierTo(
+      size.width * 0.5,
+      size.height,
+      size.width,
+      size.height - 60,
+    );
+
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

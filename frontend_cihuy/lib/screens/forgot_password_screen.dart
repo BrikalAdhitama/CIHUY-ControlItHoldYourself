@@ -7,11 +7,14 @@ class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  State<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final TextEditingController _emailController = TextEditingController();
+class _ForgotPasswordScreenState
+    extends State<ForgotPasswordScreen> {
+  final TextEditingController _emailController =
+      TextEditingController();
   bool _isLoading = false;
 
   Future<void> _sendCode() async {
@@ -19,7 +22,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    bool success = await AuthService.sendPasswordResetEmail(_emailController.text);
+    bool success =
+        await AuthService.sendPasswordResetEmail(
+      _emailController.text,
+    );
 
     setState(() => _isLoading = false);
 
@@ -29,14 +35,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Kode dikirim! Cek email Anda.'),
-          backgroundColor: Color(0xFF00796B), // Hijau konsisten
+          backgroundColor: Color(0xFF00796B),
         ),
       );
 
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ResetPasswordScreen(email: _emailController.text),
+          builder: (_) => ResetPasswordScreen(
+            email: _emailController.text,
+          ),
         ),
       );
     } else {
@@ -51,85 +59,165 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Cek Tema
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
+
+    final bgColor =
+        isDark ? const Color(0xFF121212) : const Color(0xFFE0F2F1);
+    final accentColor =
+        isDark ? const Color(0xFF4DB6AC) : const Color(0xFF00796B);
 
     return Scaffold(
-      // 2. Background Konsisten (Biru Muda di Light, Hitam di Dark)
-      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFE0F2F1),
-
-      appBar: AppBar(
-        title: Text(
-          "Lupa Password",
-          style: TextStyle(
-            // Warna Teks menyesuaikan background
-            color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent, // Transparan biar nyatu
-        elevation: 0, // Hilangkan bayangan garis
-        iconTheme: IconThemeData(
-          color: isDark ? Colors.white : Colors.black87,
-        ),
-      ),
-
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center, // Konten di tengah vertikal
-          children: [
-            Text(
-              "Masukkan email Anda yang terdaftar.\nKami akan mengirimkan kode pemulihan.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                // Warna teks instruksi menyesuaikan
-                color: isDark ? Colors.grey[400] : Colors.grey[700],
-                fontSize: 15,
-                height: 1.5,
+      backgroundColor: bgColor,
+      body: Column(
+        children: [
+          // ===== HEADER (SINGLE WAVE) =====
+          ClipPath(
+            clipper: SmoothWaveClipper(),
+            child: Container(
+              height: 180,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF00796B),
+                    Color(0xFF4DB6AC),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
-            ),
-            const SizedBox(height: 35),
-
-            CustomTextField(
-              controller: _emailController,
-              labelText: "Email",
-              prefixIcon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              // Pastikan CustomTextField backgroundnya putih/netral di light mode
-            ),
-
-            const SizedBox(height: 30),
-
-            _isLoading
-                ? const CircularProgressIndicator(color: Color(0xFF00796B))
-                : SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _sendCode,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00796B), // Hijau Brand
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+              child: Stack(
+                children: [
+                  // BACK BUTTON
+                  Positioned(
+                    top: 40,
+                    left: 16,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 20,
                       ),
-                      child: const Text(
-                        "Kirim Kode",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ),
-          ],
-        ),
+
+                  // TITLE
+                  const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.lock_reset,
+                          color: Colors.white,
+                          size: 36,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Lupa Password?',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ===== FORM =====
+          Expanded(
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+
+                      Text(
+                        'Masukkan email yang terdaftar.\nKami akan mengirimkan kode pemulihan.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.grey[400]
+                              : Colors.grey[700],
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+
+                      CustomTextField(
+                        controller: _emailController,
+                        labelText: 'Email',
+                        prefixIcon: Icons.email_outlined,
+                        keyboardType:
+                            TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 30),
+
+                      _isLoading
+                          ? Center(
+                              child: CircularProgressIndicator(
+                                  color: accentColor),
+                            )
+                          : ElevatedButton(
+                              onPressed: _sendCode,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(30),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                        vertical: 15),
+                              ),
+                              child: const Text(
+                                'Kirim Kode',
+                                style:
+                                    TextStyle(fontSize: 16),
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// ===== SINGLE SMOOTH WAVE (SAMA DENGAN LOGIN & REGISTER) =====
+class SmoothWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 50);
+
+    path.quadraticBezierTo(
+      size.width * 0.5,
+      size.height,
+      size.width,
+      size.height - 50,
+    );
+
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

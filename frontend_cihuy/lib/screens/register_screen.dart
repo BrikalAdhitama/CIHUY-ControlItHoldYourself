@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/custom_textfield.dart';
-import 'verify_screen.dart'; // <-- PENTING: Import Verify Screen
+import 'verify_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -24,7 +24,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    // 1. Validasi basic
     if (email.isEmpty || username.isEmpty || password.isEmpty) {
       setState(() => _message = 'Semua field harus diisi');
       return;
@@ -40,28 +39,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _message = '';
     });
 
-    // 2. CEK USERNAME SUDAH DIPAKAI ATAU BELUM
-    final available = await AuthService.isUsernameAvailable(username);
+    final available =
+        await AuthService.isUsernameAvailable(username);
     if (!available) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _message = 'Username sudah digunakan, coba yang lain.';
+        _message = 'Username sudah digunakan.';
       });
       return;
     }
 
-    // 3. Kalau aman → lanjut kirim OTP (register ke Supabase Auth)
-    final response = await AuthService.register(
-      email,
-      password,
-    );
+    final response =
+        await AuthService.register(email, password);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (response['success'] == true) {
-      // Tampilkan pesan sukses
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(response['message']),
@@ -69,19 +64,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Pindah ke Verify Screen sambil MEMBAWA data Username
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => VerifyScreen(
+          builder: (_) => VerifyScreen(
             email: email,
-            username: username, // Username dikirim lewat sini
+            username: username,
           ),
         ),
       );
     } else {
-      // Tampilkan pesan error
-      setState(() => _message = response['message'] ?? 'Register gagal.');
+      setState(() =>
+          _message = response['message'] ?? 'Register gagal.');
     }
   }
 
@@ -95,137 +89,188 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Logika Warna (Dark/Light Mode)
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final titleColor =
-        isDarkMode ? Colors.white : const Color(0xFF00796B);
-    final accentColor =
-        isDarkMode ? const Color(0xFF4DB6AC) : const Color(0xFF00796B);
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
+
     final bgColor =
-        isDarkMode ? const Color(0xFF121212) : const Color(0xFFE0F2F1);
+        isDark ? const Color(0xFF121212) : const Color(0xFFE0F2F1);
+    final accentColor =
+        isDark ? const Color(0xFF4DB6AC) : const Color(0xFF00796B);
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: bgColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leadingWidth: 130,
-        leading: TextButton.icon(
-          onPressed: () => Navigator.pop(context),
-          icon: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            size: 18,
-            color: accentColor,
-          ),
-          label: Text(
-            'Kembali',
-            style: TextStyle(
-              color: accentColor,
-              fontWeight: FontWeight.bold,
+      body: Column(
+        children: [
+          // ===== HEADER (SINGLE WAVE) =====
+          ClipPath(
+            clipper: SmoothWaveClipper(),
+            child: Container(
+              height: 230,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF00796B),
+                    Color(0xFF4DB6AC),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  // BACK BUTTON
+                  Positioned(
+                    top: 40,
+                    left: 16,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+
+                  // TITLE
+                  const Center(
+                    child: Text(
+                      'Create Account',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 40.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'CIHUY!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
-                ),
-                const SizedBox(height: 50),
 
-                // Input Email
-                CustomTextField(
-                  controller: _emailController,
-                  labelText: 'Masukkan email',
-                  prefixIcon: Icons.email_outlined,
-                ),
-                const SizedBox(height: 20),
+          // ===== FORM =====
+          Expanded(
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
 
-                // Input Username
-                CustomTextField(
-                  controller: _usernameController,
-                  labelText: 'Masukkan username',
-                  prefixIcon: Icons.person_outline,
-                ),
-                const SizedBox(height: 20),
-
-                // Input Password
-                CustomTextField(
-                  controller: _passwordController,
-                  labelText: 'Masukkan password',
-                  obscureText: !_isPasswordVisible,
-                  prefixIcon: Icons.lock_outline,
-                  suffixIcon: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isPasswordVisible = !_isPasswordVisible;
-                      });
-                    },
-                    child: Text(
-                      _isPasswordVisible ? 'Sembunyikan' : 'Tampilkan',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                      CustomTextField(
+                        controller: _emailController,
+                        labelText: 'Masukkan email',
+                        prefixIcon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
-                // Pesan Error / Info
-                if (_message.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20.0),
-                    child: Text(
-                      _message,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _message.toLowerCase().contains('berhasil')
-                            ? Colors.green
-                            : Colors.red,
+                      CustomTextField(
+                        controller: _usernameController,
+                        labelText: 'Masukkan username',
+                        prefixIcon: Icons.person_outline,
                       ),
-                    ),
-                  ),
+                      const SizedBox(height: 18),
 
-                // Tombol Daftar
-                _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton(
-                        onPressed: _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                      CustomTextField(
+                        controller: _passwordController,
+                        labelText: 'Masukkan password',
+                        obscureText: !_isPasswordVisible,
+                        prefixIcon: Icons.lock_outline,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: accentColor,
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          elevation: 2,
-                        ),
-                        child: const Text(
-                          'Buat akun',
-                          style: TextStyle(fontSize: 18),
+                          onPressed: () {
+                            setState(() {
+                              _isPasswordVisible =
+                                  !_isPasswordVisible;
+                            });
+                          },
                         ),
                       ),
-                const SizedBox(height: 30),
-              ],
+                      const SizedBox(height: 20),
+
+                      if (_message.isNotEmpty)
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: 20),
+                          child: Text(
+                            _message,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _message
+                                      .toLowerCase()
+                                      .contains('berhasil')
+                                  ? Colors.green
+                                  : Colors.red,
+                            ),
+                          ),
+                        ),
+
+                      _isLoading
+                          ? Center(
+                              child: CircularProgressIndicator(
+                                  color: accentColor),
+                            )
+                          : ElevatedButton(
+                              onPressed: _register,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(30),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                        vertical: 15),
+                              ),
+                              child: const Text(
+                                'Buat Akun',
+                                style:
+                                    TextStyle(fontSize: 18),
+                              ),
+                            ),
+                      const SizedBox(height: 30),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
+
+/// ===== SINGLE SMOOTH WAVE (SAMA DENGAN LOGIN) =====
+class SmoothWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 60);
+
+    path.quadraticBezierTo(
+      size.width * 0.5,
+      size.height,
+      size.width,
+      size.height - 60,
+    );
+
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
