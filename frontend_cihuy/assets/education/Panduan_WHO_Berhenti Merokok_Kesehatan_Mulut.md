@@ -138,8 +138,8 @@ Kalau mau, aku bisa ubah artikel ini jadi versi **majalah**, **poster edukasi**,
 
 ## Sumber Resmi WHO
 
-- **A Guide for Oral Disease Patients to Quit Tobacco Use** — World Health Organization (WHO)
-- **WHO Monograph on Tobacco Cessation and Oral Health Integration** — World Health Organization (WHO)
+- **A Guide for Oral Disease Patients to Quit Tobacco Use** - World Health Organization (WHO)
+- **WHO Monograph on Tobacco Cessation and Oral Health Integration** - World Health Organization (WHO)
 
 Kedua dokumen ini adalah publikasi resmi WHO dan menjadi dasar pembuatan artikel ini.
 
