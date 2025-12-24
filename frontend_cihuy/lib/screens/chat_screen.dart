@@ -275,7 +275,7 @@ class _ChatScreenState extends State<ChatScreen> with AutomaticKeepAliveClientMi
             
             // 2. Sapaan Ramah
             Text(
-              "Halo, Sahabat CiHuy! 👋",
+              "Halo, Sahabat CIHUY! 👋",
               style: TextStyle(
                 color: isDark ? Colors.white : Colors.black87,
                 fontSize: 22,
