@@ -14,7 +14,7 @@ Efek merokok pada mulut meliputi:
 - Gigi menguning, karang gigi menumpuk
 - Infeksi gusi (gingival abscess)
 - Periodontitis & kerusakan jaringan penyangga gigi
-- Smoker’s lip & smoker’s palate
+- Smoker's lip & smoker's palate
 - Leukoplakia (lesi putih prakanan)
 - Kanker mulut
 - Penyembuhan luka lama, terutama setelah cabut gigi
