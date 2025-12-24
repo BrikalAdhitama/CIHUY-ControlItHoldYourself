@@ -9,7 +9,7 @@ Jawabannya: **iya, 100% yes.** Efek baiknya mulai muncul super cepat, bahkan dal
 - **2–12 minggu:** sirkulasi darah makin bagus dan fungsi paru meningkat.
 - **1–9 bulan:** batuk dan sesak napas mulai berkurang signifikan.
 - **1 tahun:** risiko penyakit jantung koroner turun jadi setengahnya dibanding perokok aktif.
-- **5 tahun:** risiko stroke turun setara orang yang nggak ngerokok (biasanya 5–15 tahun setelah berhenti).
+- **5 tahun:** risiko stroke turun setara orang yang nggak ngerokok (biasanya 5-15 tahun setelah berhenti).
 - **10 tahun:** risiko kanker paru turun jadi separuh perokok, dan risiko kanker mulut, tenggorokan, kerongkongan, kantong kemih, serviks, dan pankreas ikut menurun.
 - **15 tahun:** risiko penyakit jantung koroner sama kayak orang yang nggak pernah merokok.
 
