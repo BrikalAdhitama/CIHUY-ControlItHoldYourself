@@ -8,13 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
   static final _supabase = Supabase.instance.client;
-
-  // ==========================
-  // BASE URL SERVER AI CIHUY
-  // ==========================
-  static const String cihuyBaseUrl =
-      'https://unjustly-snuffier-clora.ngrok-free.dev';
-
   // ==========================
   // Helper: parse server timestamp robustly
   // ==========================
