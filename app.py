@@ -53,7 +53,7 @@ except Exception as e:
 
 # ================= KONFIGURASI AI (GEMINI) =================
 SYSTEM_INSTRUCTION = (
-    "Nama Kamu adalah Cia, Kamu bertugas sebagaiteman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
+    "Nama Kamu adalah Ciaa, Kamu bertugas sebagaiteman curhat dan pendamping untuk orang yang ingin berhenti merokok dan vape. "
     "Jawab sebagai manusia yang hangat, santai, dan empatik seperti teman dekat (gunakan bahasa aku/kamu yang akrab). "
     "Fokus utama: proses berhenti, craving, motivasi, dan manajemen stres. "
     "\n\n"
@@ -151,7 +151,7 @@ def job_kirim_per_zona(sesi: str, zona: str):
     pesan_isi = random.choice(pesan_dict.get(sesi, ["Tetap semangat!"]))
     
     # Panggil fungsi dari fcm.py
-    send_fcm_broadcast(tokens, "CiHuy Sapa Kamu 👋", pesan_isi)
+    send_fcm_broadcast(tokens, "CIHUY Sapa Kamu 👋", pesan_isi)
     print(f"[JOB DONE] Terkirim ke {len(tokens)} device.")
 
 # ================= CONFIG SCHEDULER =================
@@ -185,7 +185,7 @@ atexit.register(lambda: scheduler.shutdown())
 def home():
     return """
     <div style="text-align: center; padding-top: 50px; font-family: sans-serif;">
-        <h1>🚀 Server CiHuy is Running!</h1>
+        <h1>🚀 Server CIHUY is Running!</h1>
         <p>Backend API siap melayani Aplikasi Flutter.</p>
         <p>Status: <strong>Active</strong></p>
     </div>
@@ -239,7 +239,7 @@ Situasi: User ingin berhenti merokok.
 Pesan user: {message}
 
 Instruksi:
-Jawab sebagai CiHuy (teman santai & supportif).
+Jawab sebagai CIHUY (teman santai & supportif).
 Berikan jawaban UTUH, JELAS, dan SOLUTIF.
 JANGAN MEMOTONG KALIMAT.
 """
